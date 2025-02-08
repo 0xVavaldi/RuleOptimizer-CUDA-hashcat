@@ -932,48 +932,68 @@ void applySwapNext(char *d_words, int *d_lengths, int pos, int numWords) {
 
 // Existing helper functions (unchanged)
 __declspec(dllexport)
-void allocateMemoryOnGPU(char **d_words, int **d_lengths, uint64_t **d_hashes, char *h_words, int *h_lengths, uint64_t *h_hashes, int numWords) {
-    cudaMalloc((void**)d_words, numWords * MAX_LEN * sizeof(char));
-    cudaMalloc((void**)d_lengths, numWords * sizeof(int));
+void allocateOriginalDictMemoryOnGPU(
+    char **d_originalDict, int **d_originalDictLengths,
+    char *h_originalDict, int *h_originalDictLengths, int numWords
+) {
+    cudaMalloc((void**)d_originalDict, numWords * MAX_LEN * sizeof(char));
+    cudaMalloc((void**)d_originalDictLengths, numWords * sizeof(int));
+
+    cudaMemcpy(*d_originalDict, h_originalDict, numWords * MAX_LEN * sizeof(char), cudaMemcpyHostToDevice);
+    cudaMemcpy(*d_originalDictLengths, h_originalDictLengths, numWords * sizeof(int), cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
+}
+
+__declspec(dllexport)
+void allocateProcessedDictMemoryOnGPU(
+    char **d_originalDict, int **d_originalDictLengths, uint64_t **d_hashes,
+    char **d_processedDict, int **d_processedDictLengths, uint64_t *h_hashes, uint64_t numWords
+) {
+    cudaMalloc((void**)d_processedDict, numWords * MAX_LEN * sizeof(char));
+    cudaMalloc((void**)d_processedDictLengths, numWords * sizeof(int));
     cudaMalloc((void**)d_hashes, numWords * sizeof(uint64_t));
 
-    cudaMemcpy(*d_words, h_words, numWords * MAX_LEN * sizeof(char), cudaMemcpyHostToDevice);
-    cudaMemcpy(*d_lengths, h_lengths, numWords * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(*d_processedDict, d_originalDict, numWords * MAX_LEN * sizeof(char), cudaMemcpyHostToDevice);
+    cudaMemcpy(*d_processedDictLengths, d_originalDictLengths, numWords * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(*d_hashes, h_hashes, numWords * sizeof(uint64_t), cudaMemcpyHostToDevice);
     cudaDeviceSynchronize();
 }
 
 __declspec(dllexport)
-void copyMemoryBackToHost(char *h_words, int *h_lengths, uint64_t* h_hashes, char *d_words, int *d_lengths, uint64_t *d_hashes, int numWords) {
-    cudaMemcpy(h_words, d_words, numWords * MAX_LEN * sizeof(char), cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_lengths, d_lengths, numWords * sizeof(int), cudaMemcpyDeviceToHost);
+void copyMemoryBackToHost(uint64_t* h_hashes, uint64_t *d_hashes, int numWords) {
     cudaMemcpy(h_hashes, d_hashes, numWords * sizeof(uint64_t), cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
 }
 
 __declspec(dllexport)
-void freeMemoryOnGPU(char *d_words, int *d_lengths, uint64_t *d_hashes) {
-    cudaFree(d_words);
-    cudaFree(d_lengths);
+void freeOriginalMemoryOnGPU(int *d_originalDict, int *d_originalDictLengths) {
+    cudaFree(d_originalDict);
+    cudaFree(d_originalDictLengths);
+    cudaDeviceSynchronize();
+}
+
+__declspec(dllexport)
+void freeProcessedMemoryOnGPU(char *d_processedDict, int *d_processedDictLengths, uint64_t *d_hashes) {
+    cudaFree(d_processedDict);
+    cudaFree(d_processedDictLengths);
     cudaFree(d_hashes);
     cudaDeviceSynchronize();
 }
 
-__global__ void xxhashKernel(char* words, int* lengths, uint64_t seed, uint64_t* hashes, int numWords) {
+__global__ void xxhashKernel(char* d_processedDict, int* d_processedDictLengths , uint64_t seed, uint64_t* hashes, int numWords) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= numWords) return;
 
-    int len = lengths[idx];
-    char* input = &words[idx * MAX_LEN];
-    hashes[idx] = xxhash64(input, len, seed);
+    char* input = &d_processedDict[idx * MAX_LEN];
+    hashes[idx] = xxhash64(input, d_processedDictLengths[idx], seed);
 }
 
 // Exported function to launch the kernel
 
 __declspec(dllexport)
-void computeXXHashes(char* d_words, int* d_lengths, uint64_t seed, uint64_t* d_hashes, int numWords) {
+void computeXXHashes(char *d_processedDict, int *d_processedDictLengths, uint64_t seed, uint64_t* d_hashes, int numWords) {
     int blocks = (numWords + THREADS - 1) / THREADS;
-    xxhashKernel<<<blocks, THREADS>>>(d_words, d_lengths, seed, d_hashes, numWords);
+    xxhashKernel<<<blocks, THREADS>>>(d_processedDict, d_processedDictLengths , seed, d_hashes, numWords);
     cudaDeviceSynchronize();
 }
 

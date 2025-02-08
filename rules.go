@@ -101,9 +101,12 @@ void applySwapNext(char *words, int *lengths, int pos, int numWords);
 // 3
 
 void computeXXHashes(char* d_words, int* d_lengths, uint64_t seed, uint64_t* d_hashes, int numWords);
-void allocateMemoryOnGPU(char **d_words, int **d_lengths, uint64_t **d_hashes, char *h_words, int *h_lengths, uint64_t *h_hashes, int numWords);
-void copyMemoryBackToHost(char *h_words, int *h_lengths, uint64_t *h_hashes, char *d_words, int *d_lengths, uint64_t *d_hashes, int numWords);
-void freeMemoryOnGPU(char *d_words, int *d_lengths, uint64_t *d_hashes);
+void allocateOriginalDictMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char *h_originalDict, int *h_originalDictLengths, int numWords);
+void freeOriginalMemoryOnGPU(char *d_originalDict, int *d_originalDictLengths);
+
+void allocateProcessedDictMemoryOnGPU(char **d_processedDict, int **d_originalDictLengths, uint64_t **d_hashes, char **d_originalDict, int **d_processedDictLengths, uint64_t *h_hashes, int numWords);
+void copyMemoryBackToHost(uint64_t *h_hashes, uint64_t *d_hashes, int numWords);
+void freeProcessedMemoryOnGPU(char *d_processedDict, int *d_processedDictLengths, uint64_t *d_hashes);
 
 //void allocateXXHashMemoryOnGPU(char **d_words, int **d_lengths, uint64_t **d_hashes, char *h_words, int *h_lengths, uint64_t *h_hashes, int numWords);
 //void copyXXHashMemoryBackToHost(char *h_words, int *h_lengths, uint64_t *h_hashes, char *d_words, int *d_lengths, uint64_t *d_hashes, int numWords);
@@ -1000,101 +1003,123 @@ func FormatAllRules(allRules []Rule, optionalDelimiter ...string) string {
 	return returnString
 }
 
-func CUDASingleRule(ruleLine *[]Rule, originalDict *[]string, originalDictCount uint64) *map[uint64]struct{} {
+func CUDAInitialize(originalDictGPUArray *[]byte, originalDictGPUArrayLengths *[]uint32, originalDictCount uint64) (*C.char, *C.int) {
+	h_originalDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
+	h_originalDictLengthPtr := (*C.int)(unsafe.Pointer(&(*originalDictGPUArrayLengths)[0]))
+
+	// target/device/destionation pointers for the data to be written to on the GPU.
+	var d_originalDict *C.char
+	var d_originalDictLengths *C.int
+	C.allocateOriginalDictMemoryOnGPU(&d_originalDict, &d_originalDictLengths, h_originalDictPtr, h_originalDictLengthPtr, C.int(originalDictCount))
+	return d_originalDict, d_originalDictLengths
+}
+
+func CUDADeinitialize(d_originalDict *C.char, d_originalDictLengths *C.int) {
+	defer C.freeOriginalMemoryOnGPU(d_originalDict, d_originalDictLengths)
+}
+
+func CUDASingleRule(ruleLine *[]Rule, d_originalDict *C.char, d_originalDictLengths *C.int, originalDictCount uint64, originalDictHashMap *map[uint64]struct{}, compareDictHashMap *map[uint64]struct{}) uint64 {
 	//// Convert Go strings to a flat C array
-	wordArray := make([]byte, (originalDictCount)*MaxLen)
-	lengths := make([]int32, originalDictCount)
 	hashes := make([]uint64, originalDictCount)
 
-	for i, word := range *originalDict {
-		copy(wordArray[i*MaxLen:], word)
-		lengths[i] = int32(len(word))
-	}
-
-	// Convert Go slices to C pointers
-	wordPtr := (*C.char)(unsafe.Pointer(&wordArray[0]))
-	hashPtr := (*C.uint64_t)(unsafe.Pointer(&hashes[0]))
-	lengthPtr := (*C.int)(unsafe.Pointer(&lengths[0]))
 	// Allocate memory on GPU
-	var d_words *C.char
+	var d_processedDict *C.char
+	var d_processedDictLengths *C.int
 	var d_hashes *C.uint64_t
-	var d_lengths *C.int
 
-	C.allocateMemoryOnGPU(&d_words, &d_lengths, &d_hashes, wordPtr, lengthPtr, hashPtr, C.int(originalDictCount))
+	hashPtr := (*C.uint64_t)(unsafe.Pointer(&hashes[0]))
+
+	C.allocateProcessedDictMemoryOnGPU(
+		&d_processedDict, &d_processedDictLengths, &d_hashes,
+		&d_originalDict, &d_originalDictLengths, hashPtr,
+		C.int(originalDictCount),
+	)
+
 	for _, rule := range *ruleLine {
 		if rule.Function == "l" {
-			C.applyLowerCase(d_words, d_lengths, C.int(originalDictCount))
+			C.applyLowerCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "u" {
-			C.applyUpperCase(d_words, d_lengths, C.int(originalDictCount))
+			C.applyUpperCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "c" {
-			C.applyCapitalize(d_words, d_lengths, C.int(originalDictCount))
+			C.applyCapitalize(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "C" {
-			C.applyInvertCapitalize(d_words, d_lengths, C.int(originalDictCount))
+			C.applyInvertCapitalize(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "t" {
-			C.applyToggleCase(d_words, d_lengths, C.int(originalDictCount))
+			C.applyToggleCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "q" {
-			C.applyDuplicateChars(d_words, d_lengths, C.int(originalDictCount))
+			C.applyDuplicateChars(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "r" {
-			C.applyReverse(d_words, d_lengths, C.int(originalDictCount))
+			C.applyReverse(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "k" {
-			C.applySwapFirstTwo(d_words, d_lengths, C.int(originalDictCount))
+			C.applySwapFirstTwo(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "K" {
-			C.applySwapLastTwo(d_words, d_lengths, C.int(originalDictCount))
+			C.applySwapLastTwo(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "d" {
-			C.applyDuplicate(d_words, d_lengths, C.int(originalDictCount))
+			C.applyDuplicate(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "f" {
-			C.applyReflect(d_words, d_lengths, C.int(originalDictCount))
+			C.applyReflect(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "{" {
-			C.applyRotateLeft(d_words, d_lengths, C.int(originalDictCount))
+			C.applyRotateLeft(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "}" {
-			C.applyRotateRight(d_words, d_lengths, C.int(originalDictCount))
+			C.applyRotateRight(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "[" {
-			C.applyDeleteFirst(d_words, d_lengths, C.int(originalDictCount))
+			C.applyDeleteFirst(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "]" {
-			C.applyDeleteLast(d_words, d_lengths, C.int(originalDictCount))
+			C.applyDeleteLast(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "E" {
-			C.applyTitleCase(d_words, d_lengths, C.int(originalDictCount))
+			C.applyTitleCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 		if rule.Function == "T" {
-			C.applyTogglePosition(d_words, d_lengths, C.int(rule.NumericParameter1), C.int(originalDictCount))
+			C.applyTogglePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount))
 		}
 		if rule.Function == "$" {
-			C.applyAppend(d_words, d_lengths, C.char(rule.Parameter1[0]), C.int(originalDictCount))
+			C.applyAppend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount))
 		}
 		if rule.Function == "^" {
-			C.applyPrepend(d_words, d_lengths, C.char(rule.Parameter1[0]), C.int(originalDictCount))
+			C.applyPrepend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount))
 		}
 		if rule.Function == "s" {
-			C.applySubstitution(d_words, d_lengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(originalDictCount))
+			C.applySubstitution(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(originalDictCount))
 		}
 		if rule.Function == "u" {
-			C.applyUpperCase(d_words, d_lengths, C.int(originalDictCount))
+			C.applyUpperCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 	}
-	C.computeXXHashes(d_words, d_lengths, 0, d_hashes, C.int(originalDictCount))
-	C.copyMemoryBackToHost(wordPtr, lengthPtr, hashPtr, d_words, d_lengths, d_hashes, C.int(originalDictCount))
+	C.computeXXHashes(d_processedDict, d_processedDictLengths, 0, d_hashes, C.int(originalDictCount))
+
+	//originalDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
+	//processedDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
+	//originalDictLengthPtr := (*C.int)(unsafe.Pointer(&(*originalDictGPUArrayLengths)[0]))
+	//originalDictLengthPtr := (*C.int)(unsafe.Pointer(&(*p)[0]))
+
+	C.copyMemoryBackToHost(hashPtr, d_hashes, C.int(originalDictCount))
 
 	// Synchronize and convert to usable so we can cleanly get rid of memory.
-	goHashes := make(map[uint64]struct{}, originalDictCount)
+	hits := uint64(0)
 	for i := uint64(0); i < originalDictCount; i++ {
-		// Convert the result element to a uint64.
-		goHashes[uint64(*(*C.uint64_t)(unsafe.Pointer(&(hashes)[i])))] = struct{}{}
+		// Count a hit if the hash is also in the compare dictionary hash map.
+		if _, exists := (*compareDictHashMap)[uint64(*(*C.uint64_t)(unsafe.Pointer(&(hashes)[i])))]; exists {
+			if _, exists2 := (*originalDictHashMap)[uint64(*(*C.uint64_t)(unsafe.Pointer(&(hashes)[i])))]; exists2 {
+				continue
+			}
+			hits++
+		}
 	}
-	defer C.freeMemoryOnGPU(d_words, d_lengths, d_hashes)
-	return &goHashes
+	defer C.freeProcessedMemoryOnGPU(d_processedDict, d_processedDictLengths, d_hashes)
+	return hits
 }

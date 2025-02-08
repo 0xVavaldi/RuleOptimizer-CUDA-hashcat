@@ -18,6 +18,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -310,6 +311,24 @@ func loadHashedWordlist(inputFile string) map[uint64]struct{} {
 	return result
 }
 
+func appendScoreToFile(ruleFileName string, hits uint64, rule *ruleObj) {
+	outputFile, err := os.OpenFile(ruleFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("Error opening or creating file:", err)
+		return
+	}
+
+	if _, err = outputFile.WriteString(strconv.FormatUint(hits, 10) + "\t" + FormatAllRules(rule.RuleLine) + "\n"); err != nil {
+		fmt.Println("Error writing to file:", err)
+		return
+	}
+
+	err = outputFile.Close()
+	if err != nil {
+		return
+	}
+}
+
 func main() {
 	//var wg sync.WaitGroup
 	originalDictName := "hashmob.net_2024-11-17.medium.found.unhex"
@@ -336,7 +355,9 @@ func main() {
 	}
 
 	fmt.Println("Loading Rules")
-	rules := loadRulesFast("best66.rule")
+
+	ruleFileName := "best66.rule"
+	rules := loadRulesFast(ruleFileName)
 
 	// Start processing
 	// Start processing
@@ -354,13 +375,20 @@ func main() {
 		progressbar.OptionShowIts(),
 		progressbar.OptionShowCount(),
 	)
-	processBar.Describe(fmt.Sprintf("Rules: %d (Current Best: 0)", len(rules)))
-	concurrencyLimit := 8
+	concurrencyLimit := 12
 	sem := make(chan struct{}, concurrencyLimit)
 	var wg sync.WaitGroup
+	writerMutex := sync.Mutex{}
+
+	originalDictGPUArray := make([]byte, (originalDictCount)*MaxLen)
+	originalDictGPUArrayLengths := make([]uint32, originalDictCount)
+	for i, word := range originalDict {
+		copy(originalDictGPUArray[i*MaxLen:], word)
+		originalDictGPUArrayLengths[i] = uint32(len(word))
+	}
+	d_originalDict, d_originalDictLengths := CUDAInitialize(&originalDictGPUArray, &originalDictGPUArrayLengths, uint64(originalDictCount))
 
 	for _, ruleObject := range rules {
-		//ProcessRules(&ruleObject, &tmp, &originalDictMap, &compareDict)
 		rule := ruleObject
 		wg.Add(1)
 		go func(rule ruleObj) {
@@ -371,23 +399,16 @@ func main() {
 			defer func() { <-sem }()
 
 			// Process the rule.
-			resultHashes := CUDASingleRule(&rule.RuleLine, &originalDict, uint64(originalDictCount))
-
-			hits := 0
-			for hash := range *resultHashes {
-				if _, exists := originalDictHashMap[hash]; exists {
-					continue
-				}
-				// Count a hit if the hash is also in the compare dictionary hash map.
-				if _, exists := compareDictHashMap[hash]; exists {
-					hits++
-				}
-			}
+			//ProcessRules(&ruleObject, &tmp, &originalDictMap, &compareDict)
+			hits := CUDASingleRule(&rule.RuleLine, d_originalDict, d_originalDictLengths, uint64(originalDictCount), &originalDictHashMap, &compareDictHashMap)
 			processBar.Add(originalDictCount)
 			// Print the rule and its hit count together.
 			// Using "\n" ensures that the printed lines are not interleaved.
-			//fmt.Printf("%s\t%d\n", FormatAllRules(rule.RuleLine), hits)
+			writerMutex.Lock()
+			appendScoreToFile(ruleFileName+".score", hits, &rule)
+			writerMutex.Unlock()
 		}(rule)
 	}
 	wg.Wait()
+	CUDADeinitialize(d_originalDict, d_originalDictLengths)
 }
