@@ -1044,7 +1044,8 @@ func CUDADeinitialize(d_originalDict *C.char, d_originalDictLengths *C.int) {
 	defer C.freeOriginalMemoryOnGPU(d_originalDict, d_originalDictLengths)
 }
 
-func CUDADeinitializeProcessed(d_processedDict *C.char, d_processedDictLengths *C.int, d_hashes *C.uint64_t) {
+func CUDADeinitializeProcessed(d_processedDict *C.char, d_processedDictLengths *C.int, d_hashes *C.uint64_t,
+) {
 	defer C.freeProcessedMemoryOnGPU(d_processedDict, d_processedDictLengths, d_hashes)
 }
 
@@ -1124,7 +1125,6 @@ func CUDASingleRule(ruleLine *[]Rule,
 			C.applyUpperCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 	}
-
 	C.computeXXHashes(d_processedDict, d_processedDictLengths, 0, d_hashes, C.int(originalDictCount))
 	//originalDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
 	//processedDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
@@ -1144,5 +1144,6 @@ func CUDASingleRule(ruleLine *[]Rule,
 			hits++
 		}
 	}
+
 	return hits
 }

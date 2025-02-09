@@ -40,7 +40,7 @@ type lineObj struct {
 }
 
 // Constants
-const MaxLen = 64
+const MaxLen = 32
 
 func ProcessRules(ruleObject *ruleObj, ruleHits *map[uint64]struct{}, originalDict *map[string]struct{}, compareDict *map[uint64]struct{}) uint64 {
 	numWorkers := runtime.NumCPU()
@@ -365,7 +365,7 @@ func main() {
 
 	// Compute Rule
 
-	processBar := progressbar.NewOptions(len(rules)*originalDictCount,
+	processBar := progressbar.NewOptions(len(rules),
 		progressbar.OptionSetPredictTime(true),
 		progressbar.OptionShowDescriptionAtLineEnd(),
 		progressbar.OptionSetRenderBlankState(true),
@@ -383,24 +383,49 @@ func main() {
 		originalDictGPUArrayLengths[i] = uint32(len(word))
 	}
 
-	writerMutex := sync.Mutex{}
+	var writerMutex sync.Mutex
+	ruleChan := make(chan *ruleObj)
+	numWorkers := 10
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
 
-	// Allocate memory on GPU
 	d_originalDict, d_originalDictLengths := CUDAInitialize(&originalDictGPUArray, &originalDictGPUArrayLengths, uint64(originalDictCount))
-	d_processedDict, d_processedDictLengths, d_hashes := CUDAInitializeProcessed(uint64(originalDictCount))
-	// Process the rule.
-	//ProcessRules(&ruleObject, &tmp, &originalDictMap, &compareDict)
+	for i := 0; i < numWorkers; i++ {
+		go func() {
+			defer wg.Done()
+			// Initialize processed variables for this worker
+			d_processedDict, d_processedDictLengths, d_hashes := CUDAInitializeProcessed(uint64(originalDictCount))
+			defer CUDADeinitializeProcessed(d_processedDict, d_processedDictLengths, d_hashes)
 
-	for _, ruleObject := range rules {
-		hits := CUDASingleRule(&ruleObject.RuleLine, d_originalDict, d_originalDictLengths, d_processedDict, d_processedDictLengths, d_hashes, uint64(originalDictCount), &originalDictHashMap, &compareDictHashMap)
-		processBar.Add(originalDictCount)
-		// Print the rule and its hit count together.
-		// Using "\n" ensures that the printed lines are not interleaved.
-		writerMutex.Lock()
-		appendScoreToFile(ruleFileName+".score", hits, &ruleObject)
-		writerMutex.Unlock()
+			// Process each rule received from the channel
+			for rule := range ruleChan {
+				hits := CUDASingleRule(
+					&rule.RuleLine,
+					d_originalDict,
+					d_originalDictLengths,
+					d_processedDict,
+					d_processedDictLengths,
+					d_hashes,
+					uint64(originalDictCount),
+					&originalDictHashMap,
+					&compareDictHashMap,
+				)
+				// Write results with existing mutex
+				writerMutex.Lock()
+				processBar.Add(1)
+				appendScoreToFile(ruleFileName+".score", hits, rule)
+				writerMutex.Unlock()
+			}
+		}()
 	}
 
+	// Send all rules to the workers
+	for i := range rules {
+		ruleChan <- &rules[i]
+	}
+	close(ruleChan)
+
+	// Wait for all workers to complete
+	wg.Wait()
 	CUDADeinitialize(d_originalDict, d_originalDictLengths)
-	CUDADeinitializeProcessed(d_processedDict, d_processedDictLengths, d_hashes)
 }

@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define MAX_LEN 64
-#define THREADS 1024
+#define MAX_LEN 32
+#define THREADS 128
 // nvcc --shared -o rules.dll rules.cu -Xcompiler "/MD" -link -cudart static
 // nvcc -shared -o librules.dll rules.cu
 
