@@ -928,8 +928,6 @@ void applySwapNext(char *d_words, int *d_lengths, int pos, int numWords) {
     cudaDeviceSynchronize();
 }
 
-
-
 // Existing helper functions (unchanged)
 __declspec(dllexport)
 void allocateOriginalDictMemoryOnGPU(
@@ -944,17 +942,27 @@ void allocateOriginalDictMemoryOnGPU(
     cudaDeviceSynchronize();
 }
 
+// Existing helper functions (unchanged)
 __declspec(dllexport)
 void allocateProcessedDictMemoryOnGPU(
-    char **d_originalDict, int **d_originalDictLengths, uint64_t **d_hashes,
-    char **d_processedDict, int **d_processedDictLengths, uint64_t *h_hashes, uint64_t numWords
+    char **d_processedDict, int **d_processedDictLengths,
+    uint64_t **d_hashes, int numWords
 ) {
     cudaMalloc((void**)d_processedDict, numWords * MAX_LEN * sizeof(char));
     cudaMalloc((void**)d_processedDictLengths, numWords * sizeof(int));
     cudaMalloc((void**)d_hashes, numWords * sizeof(uint64_t));
+    cudaDeviceSynchronize();
+}
 
-    cudaMemcpy(*d_processedDict, d_originalDict, numWords * MAX_LEN * sizeof(char), cudaMemcpyHostToDevice);
-    cudaMemcpy(*d_processedDictLengths, d_originalDictLengths, numWords * sizeof(int), cudaMemcpyHostToDevice);
+__declspec(dllexport)
+void ResetProcessedDictMemoryOnGPU(
+    char **d_originalDict, int **d_originalDictLengths, uint64_t **d_hashes,
+    char **d_processedDict, int **d_processedDictLengths, uint64_t **h_hashes, int numWords
+) {
+    // Copy from original (device) to processed (device)
+    cudaMemcpy(*d_processedDict, *d_originalDict, numWords * MAX_LEN * sizeof(char), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(*d_processedDictLengths, *d_originalDictLengths, numWords * sizeof(int), cudaMemcpyDeviceToDevice);
+    // Copy hashes from host to device
     cudaMemcpy(*d_hashes, h_hashes, numWords * sizeof(uint64_t), cudaMemcpyHostToDevice);
     cudaDeviceSynchronize();
 }

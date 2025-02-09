@@ -102,12 +102,13 @@ void applySwapNext(char *words, int *lengths, int pos, int numWords);
 
 void computeXXHashes(char* d_words, int* d_lengths, uint64_t seed, uint64_t* d_hashes, int numWords);
 void allocateOriginalDictMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char *h_originalDict, int *h_originalDictLengths, int numWords);
+void allocateProcessedDictMemoryOnGPU(char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hashes, int numWords);
 void freeOriginalMemoryOnGPU(char *d_originalDict, int *d_originalDictLengths);
 
-void allocateProcessedDictMemoryOnGPU(char **d_processedDict, int **d_originalDictLengths, uint64_t **d_hashes, char **d_originalDict, int **d_processedDictLengths, uint64_t *h_hashes, int numWords);
 void copyMemoryBackToHost(uint64_t *h_hashes, uint64_t *d_hashes, int numWords);
 void freeProcessedMemoryOnGPU(char *d_processedDict, int *d_processedDictLengths, uint64_t *d_hashes);
 
+void ResetProcessedDictMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, uint64_t **d_hashes, char **d_processedDict, int **d_processedDictLengths, uint64_t *h_hashes, int numWords);
 //void allocateXXHashMemoryOnGPU(char **d_words, int **d_lengths, uint64_t **d_hashes, char *h_words, int *h_lengths, uint64_t *h_hashes, int numWords);
 //void copyXXHashMemoryBackToHost(char *h_words, int *h_lengths, uint64_t *h_hashes, char *d_words, int *d_lengths, uint64_t *d_hashes, int numWords);
 //void freeXXHashMemoryOnGPU(char *d_words, int *d_lengths, uint64_t *d_hashes);
@@ -1010,30 +1011,53 @@ func CUDAInitialize(originalDictGPUArray *[]byte, originalDictGPUArrayLengths *[
 	// target/device/destionation pointers for the data to be written to on the GPU.
 	var d_originalDict *C.char
 	var d_originalDictLengths *C.int
-	C.allocateOriginalDictMemoryOnGPU(&d_originalDict, &d_originalDictLengths, h_originalDictPtr, h_originalDictLengthPtr, C.int(originalDictCount))
+
+	C.allocateOriginalDictMemoryOnGPU(&d_originalDict, &d_originalDictLengths,
+		h_originalDictPtr, h_originalDictLengthPtr, C.int(originalDictCount))
 	return d_originalDict, d_originalDictLengths
+}
+
+func CUDAInitializeProcessed(originalDictCount uint64) (*C.char, *C.int, *C.uint64_t) {
+	var d_processedDict *C.char
+	var d_processedDictLengths *C.int
+	var d_hashes *C.uint64_t
+
+	C.allocateProcessedDictMemoryOnGPU(&d_processedDict, &d_processedDictLengths,
+		&d_hashes,
+		C.int(originalDictCount))
+	return d_processedDict, d_processedDictLengths, d_hashes
+}
+
+func CUDAResetState(
+	d_originalDict *C.char, d_originalDictLengths *C.int, d_hashes *C.uint64_t,
+	d_processedDict *C.char, d_processedDictLengths *C.int, h_hashes *C.uint64_t,
+	originalDictCount int,
+) {
+	C.ResetProcessedDictMemoryOnGPU(
+		&d_originalDict, &d_originalDictLengths, &d_hashes,
+		&d_processedDict, &d_processedDictLengths, h_hashes,
+		C.int(originalDictCount),
+	)
 }
 
 func CUDADeinitialize(d_originalDict *C.char, d_originalDictLengths *C.int) {
 	defer C.freeOriginalMemoryOnGPU(d_originalDict, d_originalDictLengths)
 }
 
-func CUDASingleRule(ruleLine *[]Rule, d_originalDict *C.char, d_originalDictLengths *C.int, originalDictCount uint64, originalDictHashMap *map[uint64]struct{}, compareDictHashMap *map[uint64]struct{}) uint64 {
-	//// Convert Go strings to a flat C array
+func CUDADeinitializeProcessed(d_processedDict *C.char, d_processedDictLengths *C.int, d_hashes *C.uint64_t) {
+	defer C.freeProcessedMemoryOnGPU(d_processedDict, d_processedDictLengths, d_hashes)
+}
+
+func CUDASingleRule(ruleLine *[]Rule,
+	d_originalDict *C.char, d_originalDictLengths *C.int,
+	d_processedDict *C.char, d_processedDictLengths *C.int,
+	d_hashes *C.uint64_t,
+	originalDictCount uint64, originalDictHashMap *map[uint64]struct{}, compareDictHashMap *map[uint64]struct{},
+) uint64 {
 	hashes := make([]uint64, originalDictCount)
+	h_hashes := (*C.uint64_t)(unsafe.Pointer(&hashes[0]))
 
-	// Allocate memory on GPU
-	var d_processedDict *C.char
-	var d_processedDictLengths *C.int
-	var d_hashes *C.uint64_t
-
-	hashPtr := (*C.uint64_t)(unsafe.Pointer(&hashes[0]))
-
-	C.allocateProcessedDictMemoryOnGPU(
-		&d_processedDict, &d_processedDictLengths, &d_hashes,
-		&d_originalDict, &d_originalDictLengths, hashPtr,
-		C.int(originalDictCount),
-	)
+	CUDAResetState(d_originalDict, d_originalDictLengths, d_hashes, d_processedDict, d_processedDictLengths, h_hashes, int(originalDictCount))
 
 	for _, rule := range *ruleLine {
 		if rule.Function == "l" {
@@ -1100,14 +1124,14 @@ func CUDASingleRule(ruleLine *[]Rule, d_originalDict *C.char, d_originalDictLeng
 			C.applyUpperCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount))
 		}
 	}
-	C.computeXXHashes(d_processedDict, d_processedDictLengths, 0, d_hashes, C.int(originalDictCount))
 
+	C.computeXXHashes(d_processedDict, d_processedDictLengths, 0, d_hashes, C.int(originalDictCount))
 	//originalDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
 	//processedDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
 	//originalDictLengthPtr := (*C.int)(unsafe.Pointer(&(*originalDictGPUArrayLengths)[0]))
 	//originalDictLengthPtr := (*C.int)(unsafe.Pointer(&(*p)[0]))
 
-	C.copyMemoryBackToHost(hashPtr, d_hashes, C.int(originalDictCount))
+	C.copyMemoryBackToHost(h_hashes, d_hashes, C.int(originalDictCount))
 
 	// Synchronize and convert to usable so we can cleanly get rid of memory.
 	hits := uint64(0)
@@ -1120,6 +1144,5 @@ func CUDASingleRule(ruleLine *[]Rule, d_originalDict *C.char, d_originalDictLeng
 			hits++
 		}
 	}
-	defer C.freeProcessedMemoryOnGPU(d_processedDict, d_processedDictLengths, d_hashes)
 	return hits
 }

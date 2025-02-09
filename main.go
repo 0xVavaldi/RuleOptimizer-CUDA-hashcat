@@ -375,10 +375,6 @@ func main() {
 		progressbar.OptionShowIts(),
 		progressbar.OptionShowCount(),
 	)
-	concurrencyLimit := 12
-	sem := make(chan struct{}, concurrencyLimit)
-	var wg sync.WaitGroup
-	writerMutex := sync.Mutex{}
 
 	originalDictGPUArray := make([]byte, (originalDictCount)*MaxLen)
 	originalDictGPUArrayLengths := make([]uint32, originalDictCount)
@@ -386,29 +382,25 @@ func main() {
 		copy(originalDictGPUArray[i*MaxLen:], word)
 		originalDictGPUArrayLengths[i] = uint32(len(word))
 	}
+
+	writerMutex := sync.Mutex{}
+
+	// Allocate memory on GPU
 	d_originalDict, d_originalDictLengths := CUDAInitialize(&originalDictGPUArray, &originalDictGPUArrayLengths, uint64(originalDictCount))
+	d_processedDict, d_processedDictLengths, d_hashes := CUDAInitializeProcessed(uint64(originalDictCount))
+	// Process the rule.
+	//ProcessRules(&ruleObject, &tmp, &originalDictMap, &compareDict)
 
 	for _, ruleObject := range rules {
-		rule := ruleObject
-		wg.Add(1)
-		go func(rule ruleObj) {
-			defer wg.Done()
-			// Acquire a slot in the semaphore.
-			sem <- struct{}{}
-			// Ensure we release the slot when done.
-			defer func() { <-sem }()
-
-			// Process the rule.
-			//ProcessRules(&ruleObject, &tmp, &originalDictMap, &compareDict)
-			hits := CUDASingleRule(&rule.RuleLine, d_originalDict, d_originalDictLengths, uint64(originalDictCount), &originalDictHashMap, &compareDictHashMap)
-			processBar.Add(originalDictCount)
-			// Print the rule and its hit count together.
-			// Using "\n" ensures that the printed lines are not interleaved.
-			writerMutex.Lock()
-			appendScoreToFile(ruleFileName+".score", hits, &rule)
-			writerMutex.Unlock()
-		}(rule)
+		hits := CUDASingleRule(&ruleObject.RuleLine, d_originalDict, d_originalDictLengths, d_processedDict, d_processedDictLengths, d_hashes, uint64(originalDictCount), &originalDictHashMap, &compareDictHashMap)
+		processBar.Add(originalDictCount)
+		// Print the rule and its hit count together.
+		// Using "\n" ensures that the printed lines are not interleaved.
+		writerMutex.Lock()
+		appendScoreToFile(ruleFileName+".score", hits, &ruleObject)
+		writerMutex.Unlock()
 	}
-	wg.Wait()
+
 	CUDADeinitialize(d_originalDict, d_originalDictLengths)
+	CUDADeinitializeProcessed(d_processedDict, d_processedDictLengths, d_hashes)
 }
