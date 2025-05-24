@@ -6,15 +6,19 @@ package main
 
 /*
 #include <stdint.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
 */
 import "C"
 import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/alecthomas/kong"
 	"github.com/cespare/xxhash/v2"
 	"github.com/schollz/progressbar/v3"
 	"io"
+	"log"
 	"os"
 	"runtime"
 	"sort"
@@ -23,6 +27,13 @@ import (
 	"sync/atomic"
 	"time"
 )
+
+type CLI struct {
+	Wordlist  string `arg:"" help:"Path to wordlist file (must fit in memory)"`
+	Target    string `arg:"" help:"Path to target data file (must fit in memory)"`
+	Rules     string `short:"r" help:"Rules to target"`
+	ScoreFile string `short:"o" help:"Score File to output results to"`
+}
 
 type ruleObj struct {
 	ID           uint64
@@ -118,7 +129,7 @@ func ProcessRules(ruleObject *ruleObj, ruleHits *map[uint64]struct{}, originalDi
 func timer(name string) func() {
 	start := time.Now()
 	return func() {
-		fmt.Printf("\n%s took %v\n", name, time.Since(start))
+		fmt.Printf("%s took %v\n", name, time.Since(start))
 	}
 }
 
@@ -183,7 +194,7 @@ func loadRulesFast(inputFile string) []ruleObj {
 	)
 	file, err := os.Open(inputFile)
 	if err != nil {
-		fmt.Println("Error opening file:", err)
+		log.Println("Error opening file:", err)
 		return []ruleObj{}
 	}
 	defer file.Close()
@@ -226,7 +237,7 @@ func loadRulesFast(inputFile string) []ruleObj {
 	return sortedRules
 }
 
-func loadHashedWordlist(inputFile string) map[uint64]struct{} {
+func loadHashedWordlist(inputFile string) []uint64 {
 	defer timer("loadHashedWordlist")()
 	wordlistLineCount, _ := lineCounter(inputFile)
 	passwordQueue := make(chan []string, 100)
@@ -261,21 +272,19 @@ func loadHashedWordlist(inputFile string) map[uint64]struct{} {
 	)
 	file, err := os.Open(inputFile)
 	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return make(map[uint64]struct{})
+		log.Println("Error opening file:", err)
+		return []uint64{}
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	ruleLineCounter := uint64(1)
 
-	result := make(map[uint64]struct{}, wordlistLineCount)
+	var resultSlice []uint64
 	wgg.Add(1)
-	go func() { // no need for mutex on a single thread
+	go func() {
 		defer wgg.Done()
 		for obj := range resultQueue {
-			for _, key := range obj {
-				result[key] = struct{}{}
-			}
+			resultSlice = append(resultSlice, obj...)
 		}
 	}()
 
@@ -308,7 +317,8 @@ func loadHashedWordlist(inputFile string) map[uint64]struct{} {
 
 	close(resultQueue)
 	wgg.Wait()
-	return result
+	sort.Slice(resultSlice, func(i, j int) bool { return resultSlice[i] < resultSlice[j] })
+	return resultSlice
 }
 
 func appendScoreToFile(ruleFileName string, hits uint64, rule *ruleObj) {
@@ -330,42 +340,58 @@ func appendScoreToFile(ruleFileName string, hits uint64, rule *ruleObj) {
 }
 
 func main() {
+	var cli CLI
+	kong.Parse(&cli,
+		kong.Name("CudaRuleScorer"),
+		kong.Description("An application that scores rules based on performance"),
+		kong.UsageOnError(),
+	)
+
+	if _, err := os.Stat(cli.Rules + ".score"); err == nil {
+		log.Println("Rules have already been scored, skipping.")
+		os.Exit(-1)
+	}
+
 	//var wg sync.WaitGroup
-	originalDictName := "hashmob.net_2024-11-17.medium.found.unhex"
+	originalDictName := cli.Wordlist
 	originalDictCount, _ := lineCounter(originalDictName)
 	originalDict := make([]string, 0, originalDictCount)
 	originalDictMap := make(map[string]struct{}, originalDictCount)
 
-	originalDictHashMap := loadHashedWordlist(originalDictName)
-	compareDictName := "hashmob.net_2025-02-02.large.found.unhex"
-	compareDictHashMap := loadHashedWordlist(compareDictName)
+	originalHashes := loadHashedWordlist(originalDictName)
+	compareDictName := cli.Target
+	compareDictCount, _ := lineCounter(compareDictName)
+	compareDictHashes := loadHashedWordlist(compareDictName)
 
 	file, err := os.Open(originalDictName)
 	if err != nil {
-		fmt.Println("Error opening file:", err)
+		log.Println("Error opening file:", err)
 		return
 	}
 	defer file.Close()
 
-	fmt.Println("Loading Input Wordlist")
+	log.Println("Loading Input Wordlist")
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		originalDict = append(originalDict, scanner.Text())
 		originalDictMap[scanner.Text()] = struct{}{}
 	}
 
-	fmt.Println("Loading Rules")
-
-	ruleFileName := "best66.rule"
+	log.Println("Loading Rules")
+	ruleFileName := cli.Rules
 	rules := loadRulesFast(ruleFileName)
+
+	deviceCount := CUDAGetDeviceCount()
+	var wg sync.WaitGroup
+	wg.Add(deviceCount)
+	log.Printf("Detected %d GPU devices. Initializing", deviceCount)
 
 	// Start processing
 	// Start processing
 	// Start processing
 
 	// Compute Rule
-
-	processBar := progressbar.NewOptions(len(rules),
+	processBar := progressbar.NewOptions(len(rules)*originalDictCount,
 		progressbar.OptionSetPredictTime(true),
 		progressbar.OptionShowDescriptionAtLineEnd(),
 		progressbar.OptionSetRenderBlankState(true),
@@ -385,37 +411,42 @@ func main() {
 
 	var writerMutex sync.Mutex
 	ruleChan := make(chan *ruleObj)
-	numWorkers := 10
-	var wg sync.WaitGroup
-	wg.Add(numWorkers)
 
-	d_originalDict, d_originalDictLengths := CUDAInitialize(&originalDictGPUArray, &originalDictGPUArrayLengths, uint64(originalDictCount))
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < deviceCount; i++ {
 		go func() {
-			defer wg.Done()
-			// Initialize processed variables for this worker
-			d_processedDict, d_processedDictLengths, d_hashes := CUDAInitializeProcessed(uint64(originalDictCount))
-			defer CUDADeinitializeProcessed(d_processedDict, d_processedDictLengths, d_hashes)
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			CUDASetDevice(i)
+			d_originalDict, d_originalDictLengths, d_originalHashes, d_compareHashes, stream := CUDAInitialize(&originalDictGPUArray, &originalDictGPUArrayLengths, &originalHashes, originalDictCount, &compareDictHashes, compareDictCount, deviceCount)
+			func() {
+				defer wg.Done()
+				// Initialize processed variables for this worker
+				d_processedDict, d_processedDictLengths, d_hitCount := CUDAInitializeProcessed(originalDictCount, stream)
+				defer func(deviceCount int, d_originalDict *C.char, d_originalDictLengths *C.int, stream C.cudaStream_t) {
+					CUDADeinitialize(d_originalDict, d_originalDictLengths, stream)
+				}(deviceCount, d_originalDict, d_originalDictLengths, stream)
 
-			// Process each rule received from the channel
-			for rule := range ruleChan {
-				hits := CUDASingleRule(
-					&rule.RuleLine,
-					d_originalDict,
-					d_originalDictLengths,
-					d_processedDict,
-					d_processedDictLengths,
-					d_hashes,
-					uint64(originalDictCount),
-					&originalDictHashMap,
-					&compareDictHashMap,
-				)
-				// Write results with existing mutex
-				writerMutex.Lock()
-				processBar.Add(1)
-				appendScoreToFile(ruleFileName+".score", hits, rule)
-				writerMutex.Unlock()
-			}
+				defer CUDADeinitializeProcessed(d_processedDict, d_processedDictLengths, d_hitCount, stream)
+				// Initialize processed variables for this worker
+				// Process each rule received from the channel and binary search the results against the original wordlist
+				// to extract new entries that don't already exist. originalHashes lives per gpu device
+				for rule := range ruleChan {
+					hits := CUDASingleRule(
+						&rule.RuleLine,
+						d_originalDict, d_originalDictLengths,
+						d_processedDict, d_processedDictLengths,
+						d_originalHashes, originalDictCount,
+						d_compareHashes, compareDictCount,
+						d_hitCount,
+						stream,
+					)
+					// Write results with existing mutex
+					writerMutex.Lock()
+					processBar.Add(originalDictCount)
+					appendScoreToFile(ruleFileName+".score", hits, rule)
+					writerMutex.Unlock()
+				}
+			}()
 		}()
 	}
 
@@ -424,8 +455,6 @@ func main() {
 		ruleChan <- &rules[i]
 	}
 	close(ruleChan)
-
-	// Wait for all workers to complete
 	wg.Wait()
-	CUDADeinitialize(d_originalDict, d_originalDictLengths)
+	log.Println("Cleaning up GPU Memory")
 }
