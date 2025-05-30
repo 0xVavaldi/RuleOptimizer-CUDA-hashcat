@@ -29,9 +29,10 @@
 } while(0)
 
 
-__device__ bool binarySearchGPU(const uint64_t* array, uint64_t length, uint64_t target) {
+__device__ bool binarySearchGPU(const uint64_t* array, int length, uint64_t target) {
     int left = 0;
     int right = length - 1;
+    if (target == 0) { return false; }
     while (left <= right) {
         int mid = left + (right - left) / 2;
         uint64_t midVal = array[mid];
@@ -799,7 +800,6 @@ __global__ void overwriteKernel(char* words, int* lengths, int pos, char replace
 
         // Check for empty string or invalid position
         if (len <= 0 || pos < 0 || pos >= len) return;
-
         // Overwrite single character
         word[pos] = replace_char;
     }
@@ -1316,6 +1316,24 @@ void allocateProcessedDictMemoryOnGPU(
 }
 
 DLL_EXPORT
+void allocateHashHitsMemoryOnGPU(
+    uint64_t **d_hashes, uint64_t *h_hashes, int64_t numWords, cudaStream_t stream
+) {
+    CUDA_CHECK(cudaMallocAsync((void**)d_hashes, numWords * sizeof(uint64_t), stream));
+    CUDA_CHECK(cudaMemcpyAsync(*d_hashes, h_hashes, numWords * sizeof(uint64_t), cudaMemcpyHostToDevice, stream));
+    cudaStreamSynchronize(stream);
+}
+
+DLL_EXPORT
+void allocateHashTableMemoryOnGPU(
+    bool **d_hashTable, bool *h_hashTable, int64_t hashTableSize, cudaStream_t stream
+) {
+    CUDA_CHECK(cudaMallocAsync((void**)d_hashTable, hashTableSize * sizeof(bool), stream));
+    CUDA_CHECK(cudaMemcpyAsync(*d_hashTable, h_hashTable, hashTableSize * sizeof(bool), cudaMemcpyHostToDevice, stream));
+    cudaStreamSynchronize(stream);
+}
+
+DLL_EXPORT
 void allocateHashesMemoryOnGPU(
     uint64_t **d_originalHashes, int originalCount,
     uint64_t **d_compareHashes, int compareCount,
@@ -1337,21 +1355,51 @@ void ResetProcessedDictMemoryOnGPU(
     uint64_t **d_hitCount, int originalDictCount,
     cudaStream_t stream
 ) {
-//     printf("Stream device %d processedDict: %p\n", device->id, *d_processedDict);
-//     printf("Stream device %d processedDictLengths: %p\n", device->id, *d_processedDictLengths);
-//     printf("Stream device %d originalDict: %p\n", device->id, *d_originalDict);
-//     printf("Stream device %d originalDictLengths: %p\n", device->id, *d_originalDictLengths);
-//     printf("Stream device %d originalDictCount: %d\n", device->id, originalDictCount);
-
     CUDA_CHECK(cudaMemsetAsync(*d_hitCount, 0, sizeof(uint64_t), stream));
     CUDA_CHECK(cudaMemcpyAsync(*d_processedDict, *d_originalDict, originalDictCount * MAX_LEN * sizeof(char), cudaMemcpyDeviceToDevice , stream));
     CUDA_CHECK(cudaMemcpyAsync(*d_processedDictLengths, *d_originalDictLengths, originalDictCount * sizeof(int), cudaMemcpyDeviceToDevice , stream));
-//     cudaStreamSynchronize(stream);
+    cudaStreamSynchronize(stream);
+}
+
+DLL_EXPORT
+void ResetProcessedDictHashedMemoryOnGPU(
+    char **d_originalDict, int **d_originalDictLengths,
+    char **d_processedDict, int **d_processedDictLengths,
+    uint64_t **d_hitCount, int originalDictCount,
+    uint64_t **d_hashes, bool **d_hashTable,
+    cudaStream_t stream
+) {
+    CUDA_CHECK(cudaMemsetAsync(*d_hitCount, 0, sizeof(uint64_t), stream));
+    CUDA_CHECK(cudaMemcpyAsync(*d_processedDict, *d_originalDict, originalDictCount * MAX_LEN * sizeof(char), cudaMemcpyDeviceToDevice , stream));
+    CUDA_CHECK(cudaMemcpyAsync(*d_processedDictLengths, *d_originalDictLengths, originalDictCount * sizeof(int), cudaMemcpyDeviceToDevice , stream));
+
+    CUDA_CHECK(cudaMemsetAsync(*d_hashes, 0, static_cast<int64_t>(originalDictCount) * sizeof(uint64_t), stream));
+    CUDA_CHECK(cudaMemsetAsync(*d_hashTable, 0, static_cast<int64_t>(originalDictCount) * 100 * sizeof(bool), stream));
+    cudaStreamSynchronize(stream);
 }
 
 DLL_EXPORT
 void copyMemoryBackToHost(uint64_t* h_hitCount, uint64_t* d_hitCount, cudaStream_t stream) {
     cudaMemcpyAsync(h_hitCount, d_hitCount, sizeof(uint64_t), cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
+}
+
+DLL_EXPORT
+void copyWordMemoryBackToHost(
+    char *h_processedDict, int *h_processedDictLengths,
+    char **d_processedDict, int **d_processedDictLengths,
+    int numWords, cudaStream_t stream) {
+    CUDA_CHECK(cudaMemcpyAsync(h_processedDict, *d_processedDict, numWords * MAX_LEN * sizeof(char), cudaMemcpyDeviceToHost, stream));
+    CUDA_CHECK(cudaMemcpyAsync(h_processedDictLengths, *d_processedDictLengths, numWords * sizeof(int), cudaMemcpyDeviceToHost, stream));
+    cudaStreamSynchronize(stream);
+}
+
+DLL_EXPORT
+void copyHashMemoryBackToHost(
+    uint64_t *h_hashes,
+    uint64_t **d_hashes,
+    int numWords, cudaStream_t stream) {
+    CUDA_CHECK(cudaMemcpyAsync(h_hashes, *d_hashes, numWords * sizeof(uint64_t), cudaMemcpyDeviceToHost, stream));
     cudaStreamSynchronize(stream);
 }
 
@@ -1368,9 +1416,20 @@ void setDevice(int device) {
 }
 
 DLL_EXPORT
-void freeOriginalMemoryOnGPU(int *d_originalDict, int *d_originalDictLengths, cudaStream_t stream) {
+void streamSynchronize(cudaStream_t stream) {
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+}
+
+DLL_EXPORT
+void freeOriginalMemoryOnGPU(char *d_originalDict, int *d_originalDictLengths, cudaStream_t stream) {
     CUDA_CHECK(cudaFreeAsync(d_originalDict, stream));
     CUDA_CHECK(cudaFreeAsync(d_originalDictLengths, stream));
+    cudaStreamSynchronize(stream);
+}
+DLL_EXPORT
+void freeOriginalHashesMemoryOnGPU(uint64_t *d_originalHashes, uint64_t *d_compareHashes, cudaStream_t stream) {
+    CUDA_CHECK(cudaFreeAsync(d_originalHashes, stream));
+    CUDA_CHECK(cudaFreeAsync(d_compareHashes, stream));
     cudaStreamSynchronize(stream);
 }
 
@@ -1382,6 +1441,18 @@ void freeProcessedMemoryOnGPU(char *d_processedDict, int *d_processedDictLengths
     cudaStreamSynchronize(stream);
 }
 
+DLL_EXPORT
+void freeHashHitsMemoryOnGPU(uint64_t *d_hashes, cudaStream_t stream) {
+    CUDA_CHECK(cudaFreeAsync(d_hashes, stream));
+    cudaStreamSynchronize(stream);
+}
+
+DLL_EXPORT
+void freeHashTableMemoryOnGPU(bool *d_hashTable, cudaStream_t stream) {
+    CUDA_CHECK(cudaFreeAsync(d_hashTable, stream));
+    cudaStreamSynchronize(stream);
+}
+
 __global__ void xxhashKernel(char* d_processedDict, int* d_processedDictLengths , uint64_t seed, uint64_t* hashes, int numWords) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= numWords) return;
@@ -1390,15 +1461,18 @@ __global__ void xxhashKernel(char* d_processedDict, int* d_processedDictLengths 
     hashes[idx] = xxhash64(input, d_processedDictLengths[idx], seed);
 }
 
+
 __global__ void xxhashWithCheckKernel(
     char* d_processedDict,
     int* d_processedLengths,
     uint64_t seed,
     const uint64_t* d_originalHashes,
-    uint64_t originalCount,
+    int originalCount,
     const uint64_t* d_compareHashes,
-    uint64_t compareCount,
-    uint64_t* hitCount
+    int compareCount,
+    uint64_t* hitCount,
+    uint64_t* d_matchingHashes,  // New output array for matching hashes
+    bool* d_hashTable  // HashTable
 ) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= originalCount) return;
@@ -1406,10 +1480,91 @@ __global__ void xxhashWithCheckKernel(
     // Compute hash
     char* word = &d_processedDict[idx * MAX_LEN];
     const uint64_t hash = xxhash64(word, d_processedLengths[idx], seed);
+    uint64_t hash2 = 0;
+
     // Atomic increment if valid hit
-    const bool inCompare = binarySearchGPU(d_compareHashes, compareCount, hash);
-    if (inCompare && !binarySearchGPU(d_originalHashes, originalCount, hash)) {
-        atomicAdd(reinterpret_cast<unsigned long long*>(hitCount), 1ULL);
+    bool alreadyCounted = false;
+    int posHashTable = hash % (originalCount * 100);
+    if(d_hashTable[posHashTable]) { // quick test O(1)
+        hash2 = xxhash64(word, d_processedLengths[idx], 1);
+        int posHashTable2 = hash2 % (originalCount * 100);
+        if(d_hashTable[posHashTable2]) { // double quick test O(1)
+            for (uint64_t i = 0; i < *hitCount; i++) { // verify O(n)
+                if (d_matchingHashes[i] == hash) {
+                    alreadyCounted = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!alreadyCounted) {
+        const bool inOriginal = binarySearchGPU(d_originalHashes, originalCount, hash);
+        const bool inCompare = binarySearchGPU(d_compareHashes, compareCount, hash);
+        if (inCompare && !inOriginal) {
+            uint64_t pos = atomicAdd(reinterpret_cast<unsigned long long*>(hitCount), 1ULL);
+            d_matchingHashes[pos] = hash;
+            d_hashTable[posHashTable] = true;
+
+            if(hash2 == 0) {
+                hash2 = xxhash64(word, d_processedLengths[idx], 1);
+            }
+            int posHashTable2 = hash2 % (originalCount * 100);
+            d_hashTable[posHashTable2] = true;
+        }
+    }
+}
+
+__global__ void xxhashWithHitsKernel(
+    char* d_processedDict,
+    int* d_processedLengths,
+    uint64_t seed,
+    const uint64_t* d_originalHashes,
+    int originalCount,
+    const uint64_t* d_compareHashes,
+    int compareCount,
+    uint64_t* hitCount,
+    uint64_t* d_matchingHashes,  // New output array for matching hashes
+    bool* d_hashTable
+) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= originalCount) return;
+
+    // Compute hash
+    char* word = &d_processedDict[idx * MAX_LEN];
+    const uint64_t hash = xxhash64(word, d_processedLengths[idx], seed);
+    uint64_t hash2 = 0;
+
+    // Atomic increment if valid hit
+    bool alreadyCounted = false;
+    int posHashTable = hash % (originalCount * 100);
+    if(d_hashTable[posHashTable]) { // quick test O(1)
+        hash2 = xxhash64(word, d_processedLengths[idx], 1);
+        int posHashTable2 = hash2 % (originalCount * 100);
+        if(d_hashTable[posHashTable2]) { // double quick test O(1)
+            for (uint64_t i = 0; i < *hitCount; i++) { // verify O(n)
+                if (d_matchingHashes[i] == hash) {
+                    alreadyCounted = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!alreadyCounted) {
+        const bool inOriginal = binarySearchGPU(d_originalHashes, originalCount, hash);
+        const bool inCompare = binarySearchGPU(d_compareHashes, compareCount, hash);
+        if (inCompare && !inOriginal) {
+            uint64_t pos = atomicAdd(reinterpret_cast<unsigned long long*>(hitCount), 1ULL);
+            d_matchingHashes[pos] = hash;
+            d_hashTable[posHashTable] = true;
+
+            if(!hash2) {
+                hash2 = xxhash64(word, d_processedLengths[idx], 1);
+            }
+            int posHashTable2 = hash2 % (originalCount * 100);
+            d_hashTable[posHashTable2] = true;
+        }
     }
 }
 
@@ -1418,7 +1573,7 @@ DLL_EXPORT
 void computeXXHashes(char *d_processedDict, int *d_processedDictLengths, uint64_t seed, uint64_t* d_hashes, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     xxhashKernel<<<blocks, THREADS, 0, stream>>>(d_processedDict, d_processedDictLengths , seed, d_hashes, numWords);
-//     cudaStreamSynchronize(stream);
+    cudaStreamSynchronize(stream);
 }
 
 DLL_EXPORT
@@ -1427,16 +1582,40 @@ void computeXXHashesWithCheck(
     const uint64_t* d_originalHashes, int originalHashCount,
     const uint64_t* d_compareHashes, int compareHashCount,
     uint64_t* d_hitCount,
+    uint64_t* d_matchingHashes,
+    bool* d_hashTable,
     cudaStream_t stream
 ) {
     int blocks = (originalHashCount + THREADS - 1) / THREADS;
-    cudaMemsetAsync(d_hitCount, 0, sizeof(uint64_t), stream);
     xxhashWithCheckKernel<<<blocks, THREADS, 0, stream>>>(
         d_processedDict, d_processedDictLengths, seed,
         d_originalHashes, originalHashCount,
         d_compareHashes, compareHashCount,
-        d_hitCount
+        d_hitCount, d_matchingHashes, d_hashTable
     );
 }
+
+DLL_EXPORT
+void computeXXHashesWithHits(
+    char *d_processedDict, int *d_processedDictLengths, uint64_t seed,
+    const uint64_t* d_originalHashes,
+    int originalHashCount,
+    const uint64_t* d_compareHashes, int compareHashCount,
+    uint64_t* d_hitCount,
+    uint64_t* d_matchingHashes,
+    bool* d_hashTable,
+    cudaStream_t stream
+) {
+    int blocks = (originalHashCount + THREADS - 1) / THREADS;
+    xxhashWithHitsKernel<<<blocks, THREADS, 0, stream>>>(
+        d_processedDict, d_processedDictLengths, seed,
+        d_originalHashes, originalHashCount,
+        d_compareHashes, compareHashCount,
+        d_hitCount, d_matchingHashes, d_hashTable
+    );
+}
+
+
+
 
 } // extern "C"

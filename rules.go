@@ -2,9 +2,10 @@ package main
 
 /*
 #cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/include"
-#cgo LDFLAGS: -L. -lrules -L"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/lib/x64" -lcudart_static -lcuda
+#cgo LDFLAGS: -L. -lrules -L"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/lib/x64" -lcudart -lcuda
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 // No Param
@@ -108,23 +109,45 @@ void computeXXHashes(char* d_words, int* d_lengths, uint64_t seed, uint64_t* d_h
 void allocateOriginalDictMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char *h_originalDict, int *h_originalDictLengths, int numWords, cudaStream_t stream);
 void allocateProcessedDictMemoryOnGPU(char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hitCount, int numWords, cudaStream_t stream);
 void allocateHashesMemoryOnGPU(uint64_t **d_originalHashes, int originalCount, uint64_t **d_compareHashes, int compareCount, uint64_t *h_originalHashes, uint64_t *h_compareHashes, cudaStream_t stream);
+void allocateHashHitsMemoryOnGPU(uint64_t **d_hashes, uint64_t *h_hashes, int64_t numWords, cudaStream_t stream);
+void allocateHashTableMemoryOnGPU(bool **d_hashTable, bool *h_hashTable, int64_t hashTableSize, cudaStream_t stream);
 
-void computeXXHashesWithCheck(char *processedDict, int *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, const uint64_t *compareHashes, int compareCount, uint64_t *hitCount, cudaStream_t stream);
+
+void computeXXHashesWithCheck(char *processedDict, int *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, const uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, bool *hashTable, cudaStream_t stream);
+void computeXXHashesWithHits(char *processedDict, int *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, bool *hashTable, cudaStream_t stream);
+
 void ResetProcessedDictMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hitCount, int numWords, cudaStream_t stream);
+void ResetProcessedDictHashedMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hitCount, int numWords, uint64_t **d_hashes, bool **d_hashTable, cudaStream_t stream);
+void ResetProcessedHitsMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hashes, int numWords, cudaStream_t stream);
 void copyMemoryBackToHost(uint64_t *h_hits, uint64_t *d_hits, cudaStream_t stream);
+void copyWordMemoryBackToHost(char* h_processedDict, int* h_processedDictLengths, char **d_processedDict, int **d_processedDictLengths, int originalDictCount, cudaStream_t stream);
+void copyHashMemoryBackToHost(uint64_t *h_hashes, uint64_t **d_hashes, int numWords, cudaStream_t stream);
 
 int getDeviceCount();
+void streamSynchronize(cudaStream_t stream);
 void setDevice(int deviceID);
 void freeOriginalMemoryOnGPU(char *d_originalDict, int *d_originalDictLengths, cudaStream_t stream);
+void freeOriginalHashesMemoryOnGPU(uint64_t *d_originalHashes, uint64_t *d_compareHashes, cudaStream_t stream);
 void freeProcessedMemoryOnGPU(char *d_processedDict, int *d_processedDictLengths, uint64_t *d_hitCount, cudaStream_t stream);
+void freeHashHitsMemoryOnGPU(uint64_t *d_hashes, cudaStream_t stream);
+void freeHashTableMemoryOnGPU(bool *d_hashTable, cudaStream_t stream);
 */
 import "C"
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/cespare/xxhash/v2"
+	"github.com/schollz/progressbar/v3"
+	"io"
+	"log"
+	"os"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 	"unsafe"
 )
@@ -147,6 +170,44 @@ func reverseString(s string) string {
 		return i > j
 	})
 	return string(runes)
+}
+
+func convertProcessedDict(h_processedDict *C.char, h_processedDictLengths *C.int, originalDictCount C.int) []string {
+	// Convert C pointers to Go slices
+	lengths := (*[1 << 30]C.int)(unsafe.Pointer(h_processedDictLengths))[:originalDictCount:originalDictCount]
+	words := (*[1 << 30]byte)(unsafe.Pointer(h_processedDict))[: originalDictCount*64 : originalDictCount*64]
+
+	var newWords []string
+	for i := 0; i < int(originalDictCount); i++ {
+		// Get length for this word
+		length := int(lengths[i])
+		if length > 32 {
+			length = 32
+		}
+
+		// Calculate start position in flat byte array
+		start := i * 32
+		end := start + length
+
+		// Extract word bytes and convert to string
+		wordBytes := words[start:end]
+		newWords = append(newWords, string(wordBytes))
+	}
+	return newWords
+}
+
+func convertProcessedHashes(h_hashes *C.uint64_t, originalDictCount C.int) []uint64 {
+	// Convert C pointers to Go slices
+	hashSlice := (*[1 << 30]C.uint64_t)(unsafe.Pointer(h_hashes))[:originalDictCount:originalDictCount]
+
+	var newHashes []uint64
+	for i := 0; i < int(originalDictCount); i++ {
+		if hashSlice[i] != 0 {
+			newHashes = append(newHashes, uint64(hashSlice[i]))
+		}
+	}
+
+	return newHashes
 }
 
 // CreateTestWords generates an array of words used to validate and verify if Rules are unique with UniqueID
@@ -1019,7 +1080,6 @@ func CUDAInitialize(
 	originalDictCount int,
 	compareHashes *[]uint64,
 	compareDictCount int,
-	deviceID int,
 ) (*C.char, *C.int, *C.uint64_t, *C.uint64_t, C.cudaStream_t) {
 	h_originalDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
 	h_originalDictLengthPtr := (*C.int)(unsafe.Pointer(&(*originalDictGPUArrayLengths)[0]))
@@ -1059,8 +1119,32 @@ func CUDAInitializeProcessed(originalDictCount int, stream C.cudaStream_t) (*C.c
 	return d_processedDict, d_processedDictLengths, d_hitCount
 }
 
+func CUDAInitializeHashHits(hashes *[]uint64, originalDictCount int, stream C.cudaStream_t) *C.uint64_t {
+	h_hashesPtr := (*C.uint64_t)(unsafe.Pointer(&(*hashes)[0]))
+	var d_hashes *C.uint64_t
+
+	C.allocateHashHitsMemoryOnGPU(&d_hashes, h_hashesPtr, C.int64_t(originalDictCount), stream)
+	return d_hashes
+}
+
+func CUDAInitializeHashTable(hashTable *[]bool, hashTableSize int, stream C.cudaStream_t) *C.bool {
+	h_hashTablePtr := (*C.bool)(unsafe.Pointer(&(*hashTable)[0]))
+	var d_hashTable *C.bool
+
+	C.allocateHashTableMemoryOnGPU(&d_hashTable, h_hashTablePtr, C.int64_t(hashTableSize), stream)
+	return d_hashTable
+}
+
 func CUDADeinitializeProcessed(d_processedDict *C.char, d_processedDictLengths *C.int, d_hitCount *C.uint64_t, stream C.cudaStream_t) {
 	C.freeProcessedMemoryOnGPU(d_processedDict, d_processedDictLengths, d_hitCount, stream)
+}
+
+func CUDADeinitializeHashHits(d_hashes *C.uint64_t, stream C.cudaStream_t) {
+	C.freeHashHitsMemoryOnGPU(d_hashes, stream)
+}
+
+func CUDADeinitializeHashTable(d_hashTable *C.bool, stream C.cudaStream_t) {
+	C.freeHashTableMemoryOnGPU(d_hashTable, stream)
 }
 
 func CUDAResetState(
@@ -1079,26 +1163,48 @@ func CUDAResetState(
 	)
 }
 
+func CUDAResetStateHashed(
+	d_originalDict *C.char, d_originalDictLengths *C.int,
+	d_processedDict *C.char, d_processedDictLengths *C.int,
+	d_hitCount *C.uint64_t, originalDictCount int,
+	d_hashes *C.uint64_t, d_hashTable *C.bool,
+	stream C.cudaStream_t,
+) {
+	d_hitCountPtr := (**C.uint64_t)(unsafe.Pointer(&d_hitCount))
+	C.ResetProcessedDictHashedMemoryOnGPU(
+		&d_originalDict, &d_originalDictLengths,
+		&d_processedDict, &d_processedDictLengths,
+		d_hitCountPtr, C.int(originalDictCount),
+		&d_hashes, &d_hashTable,
+		stream,
+	)
+}
+
 func CUDAGetDeviceCount() int {
 	return int(C.getDeviceCount())
 }
 
 func CUDADeinitialize(d_originalDict *C.char, d_originalDictLengths *C.int, stream C.cudaStream_t) {
 	C.freeOriginalMemoryOnGPU(d_originalDict, d_originalDictLengths, stream)
+}
+
+func CUDADeinitializeHashes(d_originalHashes *C.uint64_t, d_compareHashes *C.uint64_t, stream C.cudaStream_t) {
+	C.freeOriginalHashesMemoryOnGPU(d_originalHashes, d_compareHashes, stream)
+}
+
+func CUDADeinitializeStream(stream C.cudaStream_t) {
 	C.cudaStreamDestroy(stream)
 }
 
-func CUDASingleRule(ruleLine *[]Rule,
+func CUDASingleRuleScore(ruleLine *[]Rule,
 	d_originalDict *C.char, d_originalDictLengths *C.int,
 	d_processedDict *C.char, d_processedDictLengths *C.int,
-	d_originalHashes *C.uint64_t, originalHashCount int,
+	d_originalHashes *C.uint64_t, originalDictCount int,
 	d_compareHashes *C.uint64_t, compareHashCount int,
-	d_hitCount *C.uint64_t,
-	stream C.cudaStream_t,
+	d_hitCount *C.uint64_t, d_hashes *C.uint64_t,
+	d_hashTable *C.bool, stream C.cudaStream_t,
 ) uint64 {
-	originalDictCount := originalHashCount
-	CUDAResetState(d_originalDict, d_originalDictLengths, d_processedDict, d_processedDictLengths, d_hitCount, originalDictCount, stream)
-
+	CUDAResetStateHashed(d_originalDict, d_originalDictLengths, d_processedDict, d_processedDictLengths, d_hitCount, originalDictCount, d_hashes, d_hashTable, stream)
 	for _, rule := range *ruleLine {
 		if rule.Function == "l" {
 			C.applyLowerCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
@@ -1292,21 +1398,509 @@ func CUDASingleRule(ruleLine *[]Rule,
 
 	// Synchronize and convert to usable so we can cleanly get rid of memory.
 	C.computeXXHashesWithCheck(
-		d_processedDict,
-		d_processedDictLengths,
-		0,
-		d_originalHashes,
-		C.int(originalHashCount),
-		d_compareHashes,
-		C.int(compareHashCount),
+		d_processedDict, d_processedDictLengths, 0,
+		d_originalHashes, C.int(originalDictCount),
+		d_compareHashes, C.int(compareHashCount),
 		d_hitCount,
+		d_hashes,
+		d_hashTable,
 		stream,
 	)
 
 	var hits uint64
-	// Copy back just the hit count1
-	//d_hitCountPtr := (*C.uint64_t)(unsafe.Pointer(&d_hitCount))
-	//h_hitsPtr := (*C.uint64_t)(unsafe.Pointer(&hits))
+	C.streamSynchronize(stream)
 	C.copyMemoryBackToHost((*C.uint64_t)(unsafe.Pointer(&hits)), d_hitCount, stream)
 	return hits
+}
+
+func CUDASingleRuleHashed(ruleLine *[]Rule,
+	d_originalDict *C.char, d_originalDictLengths *C.int,
+	d_processedDict *C.char, d_processedDictLengths *C.int,
+	d_originalHashes *C.uint64_t, originalDictCount int,
+	d_compareHashes *C.uint64_t, compareHashCount int,
+	d_hitCount *C.uint64_t, d_hashes *C.uint64_t,
+	d_hashTable *C.bool, stream C.cudaStream_t,
+) []uint64 {
+	CUDAResetStateHashed(d_originalDict, d_originalDictLengths, d_processedDict, d_processedDictLengths, d_hitCount, originalDictCount, d_hashes, d_hashTable, stream)
+	for _, rule := range *ruleLine {
+		if rule.Function == "l" {
+			C.applyLowerCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "u" {
+			C.applyUpperCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "c" {
+			C.applyCapitalize(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "C" {
+			C.applyInvertCapitalize(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "t" {
+			C.applyToggleCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "q" {
+			C.applyDuplicateChars(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "r" {
+			C.applyReverse(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "k" {
+			C.applySwapFirstTwo(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "K" {
+			C.applySwapLastTwo(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "d" {
+			C.applyDuplicate(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "f" {
+			C.applyReflect(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "{" {
+			C.applyRotateLeft(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "}" {
+			C.applyRotateRight(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "[" {
+			C.applyDeleteFirst(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "]" {
+			C.applyDeleteLast(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "E" {
+			C.applyTitleCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "T" {
+			C.applyTogglePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "p" {
+			C.applyRepeatWord(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "D" {
+			C.applyDeletePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "z" {
+			C.applyPrependFirstChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "Z" {
+			C.applyAppendLastChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "'" {
+			C.applyTruncateAt(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "s" {
+			C.applySubstitution(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "S" {
+			C.applySubstitutionFirst(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "$" {
+			C.applyAppend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "^" {
+			C.applyPrepend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "y" {
+			C.applyAppendSuffixSubstr(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "Y" {
+			C.applyPrependPrefixSubstr(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "L" {
+			C.applyBitShiftLeft(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "R" {
+			C.applyBitShiftRight(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "-" {
+			C.applyDecrementChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "+" {
+			C.applyIncrementChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "@" {
+			C.applyDeleteAllChar(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "." {
+			C.applySwapNext(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "," {
+			C.applySwapLast(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "e" {
+			C.applyTitleSeparator(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "i" {
+			C.applyInsert(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "O" {
+			C.applyOmit(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "o" {
+			C.applyOverwrite(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "*" {
+			C.applySwapAny(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "x" {
+			C.applyExtract(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "<" {
+			C.applyRejectLess(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == ">" {
+			C.applyRejectGreater(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "_" {
+			C.applyRejectEqual(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "!" {
+			C.applyRejectContain(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "/" {
+			C.applyRejectNotContain(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			continue
+		}
+		if rule.Function == "3" {
+			C.applyToggleWithNSeparator(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
+			continue
+		}
+	}
+
+	C.computeXXHashesWithHits(
+		d_processedDict, d_processedDictLengths, 0,
+		d_originalHashes, C.int(originalDictCount),
+		d_compareHashes, C.int(compareHashCount),
+		d_hitCount,
+		d_hashes,
+		d_hashTable,
+		stream,
+	)
+
+	h_hashes := (*C.uint64_t)(C.calloc(C.size_t(originalDictCount), C.sizeof_uint64_t))
+	C.copyHashMemoryBackToHost(h_hashes, &d_hashes, C.int(originalDictCount), stream)
+	hashes := convertProcessedHashes(h_hashes, C.int(originalDictCount))
+	defer C.free(unsafe.Pointer(h_hashes))
+	return hashes
+}
+
+func timer(name string) func() {
+	start := time.Now()
+	return func() {
+		fmt.Printf("%s took %v\n", name, time.Since(start))
+	}
+}
+
+func lineCounter(inputFile string) (int, error) {
+	file, err := os.Open(inputFile)
+	if err != nil {
+		return 0, err
+	}
+
+	defer file.Close()
+	buf := make([]byte, 32*1024)
+	count := 0
+	lineSep := []byte{'\n'}
+
+	for {
+		c, err := file.Read(buf)
+		count += bytes.Count(buf[:c], lineSep)
+		switch {
+		case err == io.EOF:
+			return count, nil
+		case err != nil:
+			return count, err
+		}
+	}
+}
+
+func loadRulesFast(inputFile string) []ruleObj {
+	defer timer("loadRules")()
+	ruleLines, _ := lineCounter(inputFile)
+	ruleQueue := make(chan lineObj, 100)
+	ruleOutput := make(chan ruleObj, ruleLines)
+	threadCount := runtime.NumCPU()
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < threadCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for rawLineObj := range ruleQueue {
+				ruleObject, _ := ConvertFromHashcat(rawLineObj.ID, rawLineObj.line)
+				hits := make(map[uint64]struct{})
+				ruleOutput <- ruleObj{rawLineObj.ID, 0, 0, ruleObject, false, hits, sync.Mutex{}}
+			}
+		}()
+	}
+
+	ruleBar := progressbar.NewOptions(ruleLines,
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionThrottle(500*time.Millisecond),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetWidth(25),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowCount(),
+	)
+	file, err := os.Open(inputFile)
+	if err != nil {
+		log.Println("Error opening file:", err)
+		return []ruleObj{}
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	ruleLineCounter := uint64(1)
+
+	for scanner.Scan() {
+		lineObject := new(lineObj)
+		lineObject.ID = ruleLineCounter
+		lineObject.line = scanner.Text()
+		if len(lineObject.line) == 0 {
+			continue
+		}
+		ruleQueue <- *lineObject
+		ruleLineCounter++
+		if ruleLineCounter%10000 == 0 {
+			ruleBar.Add(10000)
+		}
+	}
+	ruleBar.Add(int(ruleLineCounter))
+	close(ruleQueue)
+	go func() {
+		wg.Wait()
+		close(ruleOutput)
+	}()
+
+	// Step 1: Consume the channel into a slice
+	var sortedRules []ruleObj
+	for obj := range ruleOutput {
+		sortedRules = append(sortedRules, obj)
+	}
+
+	// Step 2: Sort the slice by ID
+	sort.Slice(sortedRules, func(i, j int) bool {
+		return sortedRules[i].ID < sortedRules[j].ID
+	})
+	ruleBar.Finish()
+	ruleBar.Close()
+	println()
+	return sortedRules
+}
+
+func parseUint64(s string) uint64 {
+	var result uint64
+	fmt.Sscanf(s, "%d", &result)
+	return result
+}
+
+func loadRuleScores(inputFile string) []ruleObj {
+	defer timer("loadRuleScores")()
+	ruleLines, _ := lineCounter(inputFile)
+	ruleQueue := make(chan lineObj, 100)
+	ruleOutput := make(chan ruleObj, ruleLines)
+	threadCount := runtime.NumCPU()
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < threadCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for rawLineObj := range ruleQueue {
+				fitness := parseUint64(strings.SplitN(rawLineObj.line, "\t", 2)[0])
+				rawLineObj.line = strings.SplitN(rawLineObj.line, "\t", 2)[1]
+				rawLineObj.line = strings.ReplaceAll(rawLineObj.line, "\t", " ")
+
+				ruleObject, _ := ConvertFromHashcat(rawLineObj.ID, rawLineObj.line)
+				hits := make(map[uint64]struct{})
+				ruleOutput <- ruleObj{rawLineObj.ID, fitness, fitness, ruleObject, false, hits, sync.Mutex{}}
+			}
+		}()
+	}
+
+	ruleBar := progressbar.NewOptions(ruleLines,
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionThrottle(500*time.Millisecond),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetWidth(25),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowCount(),
+	)
+	file, err := os.Open(inputFile)
+	if err != nil {
+		log.Println("Error opening file:", err)
+		return []ruleObj{}
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	ruleLineCounter := uint64(1)
+
+	for scanner.Scan() {
+		lineObject := new(lineObj)
+		lineObject.ID = ruleLineCounter
+		lineObject.line = scanner.Text()
+		if len(lineObject.line) == 0 {
+			continue
+		}
+		ruleQueue <- *lineObject
+		ruleLineCounter++
+		if ruleLineCounter%10000 == 0 {
+			ruleBar.Add(10000)
+		}
+	}
+	ruleBar.Add(int(ruleLineCounter))
+	close(ruleQueue)
+	go func() {
+		wg.Wait()
+		close(ruleOutput)
+	}()
+
+	// Step 1: Consume the channel into a slice
+	var sortedRules []ruleObj
+	for obj := range ruleOutput {
+		sortedRules = append(sortedRules, obj)
+	}
+
+	// Step 2: Sort the slice by ID
+	sort.Slice(sortedRules, func(i, j int) bool {
+		return sortedRules[i].ID < sortedRules[j].ID
+	})
+	ruleBar.Finish()
+	ruleBar.Close()
+	println()
+	return sortedRules
+}
+
+func loadHashedWordlist(inputFile string) []uint64 {
+	defer timer("loadHashedWordlist")()
+	wordlistLineCount, _ := lineCounter(inputFile)
+	passwordQueue := make(chan []string, 100)
+	resultQueue := make(chan []uint64, 100)
+	threadCount := runtime.NumCPU()
+	wg := sync.WaitGroup{}
+	wgg := sync.WaitGroup{}
+
+	for i := 0; i < threadCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for bufferQueue := range passwordQueue {
+				var bufferResults []uint64
+				for _, rawLine := range bufferQueue {
+					if len(rawLine) <= 32 {
+						bufferResults = append(bufferResults, xxhash.Sum64String(rawLine))
+					}
+				}
+				resultQueue <- bufferResults
+			}
+		}()
+	}
+
+	wordlistBar := progressbar.NewOptions(wordlistLineCount,
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionThrottle(500*time.Millisecond),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetWidth(25),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowCount(),
+	)
+	file, err := os.Open(inputFile)
+	if err != nil {
+		log.Println("Error opening file:", err)
+		return []uint64{}
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	ruleLineCounter := uint64(1)
+
+	var resultSlice []uint64
+	wgg.Add(1)
+	go func() {
+		defer wgg.Done()
+		for obj := range resultQueue {
+			resultSlice = append(resultSlice, obj...)
+		}
+	}()
+
+	var buffer []string
+	bufferSize := 10000
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) == 0 {
+			continue
+		}
+		buffer = append(buffer, line)
+		ruleLineCounter++
+		if len(buffer) >= bufferSize {
+			passwordQueue <- buffer
+			buffer = make([]string, 0, bufferSize)
+			wordlistBar.Add(bufferSize)
+		}
+	}
+	if len(buffer) > 0 {
+		passwordQueue <- buffer
+		wordlistBar.Add(len(buffer))
+	}
+	wordlistBar.Finish()
+	wordlistBar.Close()
+	println()
+
+	println("Finalizing Preparation")
+	close(passwordQueue)
+	wg.Wait()
+	close(resultQueue)
+	wgg.Wait()
+	sort.Slice(resultSlice, func(i, j int) bool { return resultSlice[i] < resultSlice[j] })
+	return resultSlice
 }
