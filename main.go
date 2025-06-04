@@ -50,22 +50,76 @@ type lineObj struct {
 // Constants
 const MaxLen = 32
 
-func RemoveElements(original, toRemove []uint64) []uint64 {
-	// Create a map for faster lookups
-	removeMap := make(map[uint64]struct{})
-	for _, v := range toRemove {
-		removeMap[v] = struct{}{}
-	}
+func cleanWords(sortedArray *[]uint64, targets *[]uint64) []uint64 {
+	// Use two pointers technique for O(n+m) complexity
+	i, j := 0, 0 // i for sortedArray, j for targets
+	k := 0       // position to write in sortedArray
 
-	// Filter the original slice
-	result := make([]uint64, 0, len(original))
-	for _, v := range original {
-		if _, exists := removeMap[v]; !exists {
-			result = append(result, v)
+	for i < len(*sortedArray) && j < len(*targets) {
+		if (*sortedArray)[i] < (*targets)[j] {
+			// Keep this element
+			(*sortedArray)[k] = (*sortedArray)[i]
+			k++
+			i++
+		} else if (*sortedArray)[i] == (*targets)[j] {
+			// Skip this element (don't copy)
+			i++
+			j++
+		} else { // sortedArray[i] > targets[j]
+			// Move to next target
+			j++
 		}
 	}
-	return result
+
+	// Copy remaining elements
+	for i < len(*sortedArray) {
+		(*sortedArray)[k] = (*sortedArray)[i]
+		k++
+		i++
+	}
+
+	return (*sortedArray)[:k]
 }
+
+//func cleanWords(original, toRemove []uint64) []uint64 {
+//	//defer timer("CleanWords")()
+//	removeMap := make(map[uint64]struct{}, len(toRemove))
+//	for _, v := range toRemove {
+//		removeMap[v] = struct{}{}
+//	}
+//
+//	result := make([]uint64, len(original))
+//	var idx atomic.Uint64 // Use atomic.Uint64 instead of *uint64
+//
+//	var wg sync.WaitGroup
+//	numWorkers := runtime.NumCPU() / 2
+//	chunkSize := len(original) / numWorkers
+//
+//	for i := 0; i < numWorkers; i++ {
+//		wg.Add(1)
+//		start := i * chunkSize
+//		end := start + chunkSize
+//		if i == numWorkers-1 {
+//			end = len(original)
+//		}
+//
+//		go func(start, end int) {
+//			defer wg.Done()
+//			localIdx := start
+//			for i := start; i < end; i++ {
+//				v := original[i]
+//				if _, exists := removeMap[v]; !exists {
+//					result[localIdx] = v
+//					localIdx++
+//				}
+//			}
+//			idx.Add(uint64(localIdx - start)) // Correct usage of atomic.Uint64.Add()
+//		}(start, end)
+//	}
+//	wg.Wait()
+//
+//	return result[:idx.Load()] // Get the final count with .Load()
+//}
 
 func CountUnique(items []uint64) uint64 {
 	unique := make(map[uint64]struct{})
@@ -94,7 +148,7 @@ func appendScoreToFile(ruleFileName string, hits uint64, rule *ruleObj) {
 }
 
 func processRuleRound(
-	rules []ruleObj, deviceCount int, originalDictGPUArray *[]byte, originalDictGPUArrayLengths *[]uint32, originalHashes *[]uint64, compareDictHashes *[]uint64, originalDictCount int, compareDictCount int) ([]ruleObj, *ruleObj) {
+	rules []ruleObj, deviceCount int, originalDictGPUArray *[]byte, originalDictGPUArrayLengths *[]uint32, originalHashes *[]uint64, compareDictHashes *[]uint64, originalDictCount int, compareDictCount int, lastFitness uint64) ([]ruleObj, *ruleObj, *[]uint64) {
 	deviceCount = CUDAGetDeviceCount()
 	ruleChan := make(chan *ruleObj, deviceCount)
 	var writerMutex sync.Mutex
@@ -113,6 +167,7 @@ func processRuleRound(
 	)
 
 	currentBestFitnessRule := &rules[0]
+	hashedWords := make([]uint64, lastFitness)
 
 	for i := 0; i < deviceCount; i++ {
 		go func() {
@@ -127,8 +182,8 @@ func processRuleRound(
 				// Initialize processed variables for this worker
 				hashes := make([]uint64, originalDictCount)
 				d_hashes := CUDAInitializeHashHits(&hashes, originalDictCount, stream)
-				hashTable := make([]bool, originalDictCount*100)
-				d_hashTable := CUDAInitializeHashTable(&hashTable, originalDictCount*100, stream)
+				hashTable := make([]bool, originalDictCount*1)
+				d_hashTable := CUDAInitializeHashTable(&hashTable, originalDictCount*1, stream)
 				d_processedDict, d_processedDictLengths, d_hitCount := CUDAInitializeProcessed(originalDictCount, stream)
 				defer func(d_originalDict *C.char, d_originalDictLengths *C.int, d_originalHashes *C.uint64_t, d_compareHashes *C.uint64_t, d_processedDict *C.char, d_processedDictLengths *C.int, d_hitCount *C.uint64_t, d_hashes *C.uint64_t, d_hashTable *C.bool, stream C.cudaStream_t) {
 					CUDADeinitialize(d_originalDict, d_originalDictLengths, stream)
@@ -163,6 +218,7 @@ func processRuleRound(
 							// If it's smaller in operations with the same hits, take that instead
 							if len(currentBestFitnessRule.RuleLine) > len(rule.RuleLine) {
 								currentBestFitnessRule = rule
+								hashedWords = CUDAGetHashes(hits, d_hashes, stream)
 							}
 						} else if hits > currentBestFitnessRule.LastFitness {
 							currentBestFitnessRule = rule
@@ -176,13 +232,27 @@ func processRuleRound(
 
 	// Send all rules to the workers
 	for i := range rules {
-		//if rules[i].LastFitness < lastBestFitness/2 { // if it's far off, skip it
-		//	if rules[i].LastFitness > 2 {
-		//		processBar.Add(originalDictCount)
-		//		continue
-		//	}
-		//}
-		if rules[i].LastFitness == 0 { // cannot get more cracks
+		if rules[i].LastFitness == 0 { // Must have the potential to be better
+			processBar.Add(originalDictCount)
+			continue
+		}
+		if rules[i].LastFitness < 231000 && rules[i].LastFitness >= 80000 && rules[i].LastFitness < lastFitness-5000 { // if it's far off, skip it
+			processBar.Add(originalDictCount)
+			continue
+		}
+		if rules[i].LastFitness < 80000 && rules[i].LastFitness >= 50000 && rules[i].LastFitness < lastFitness-2000 { // if it's far off, skip it
+			processBar.Add(originalDictCount)
+			continue
+		}
+		if rules[i].LastFitness < 50000 && rules[i].LastFitness >= 10000 && rules[i].LastFitness < lastFitness-500 { // if it's far off, skip it
+			processBar.Add(originalDictCount)
+			continue
+		}
+		if rules[i].LastFitness < 10000 && rules[i].LastFitness < lastFitness-100 { // if it's far off, skip it
+			processBar.Add(originalDictCount)
+			continue
+		}
+		if rules[i].LastFitness < 3000 && rules[i].LastFitness < lastFitness-10 { // if it's far off, skip it
 			processBar.Add(originalDictCount)
 			continue
 		}
@@ -199,7 +269,7 @@ func processRuleRound(
 	wg.Wait()
 	processBar.Close()
 	processBar.Finish()
-	return rules, currentBestFitnessRule
+	return rules, currentBestFitnessRule, &hashedWords
 }
 
 func processRuleFile(
@@ -259,8 +329,8 @@ func processRuleFile(
 				// Initialize processed variables for this worker
 				hashes := make([]uint64, originalDictCount)
 				d_hashes := CUDAInitializeHashHits(&hashes, originalDictCount, stream)
-				hashTable := make([]bool, originalDictCount*100)
-				d_hashTable := CUDAInitializeHashTable(&hashTable, originalDictCount*100, stream)
+				hashTable := make([]bool, originalDictCount*1)
+				d_hashTable := CUDAInitializeHashTable(&hashTable, originalDictCount*1, stream)
 				d_processedDict, d_processedDictLengths, d_hitCount := CUDAInitializeProcessed(originalDictCount, stream)
 				defer func(d_originalDict *C.char, d_originalDictLengths *C.int, d_originalHashes *C.uint64_t, d_compareHashes *C.uint64_t, d_processedDict *C.char, d_processedDictLengths *C.int, d_hitCount *C.uint64_t, d_hashes *C.uint64_t, d_hashTable *C.bool, stream C.cudaStream_t) {
 					CUDADeinitialize(d_originalDict, d_originalDictLengths, stream)
@@ -396,12 +466,23 @@ func generatePhase1(cli CLI) {
 func generatePhase2(cli CLI) {
 	originalDictName := cli.Wordlist
 	originalDictCount, _ := lineCounter(originalDictName)
+	compareDictCount, _ := lineCounter(cli.Target)
 	originalDict := make([]string, 0, originalDictCount)
+	originalHashes := make([]uint64, 0, originalDictCount)
+	compareDictHashes := make([]uint64, 0, compareDictCount)
+	var startup sync.WaitGroup
+	startup.Add(2)
 
-	originalHashes := loadHashedWordlist(originalDictName)
-	compareDictName := cli.Target
-	compareDictCount, _ := lineCounter(compareDictName)
-	compareDictHashes := loadHashedWordlist(compareDictName)
+	go func() {
+		defer startup.Done()
+		originalHashes = loadHashedWordlist(originalDictName)
+	}()
+
+	go func() {
+		defer startup.Done()
+		compareDictHashes = loadHashedWordlist(cli.Target)
+	}()
+	startup.Wait()
 
 	file, err := os.Open(originalDictName)
 	if err != nil {
@@ -439,10 +520,12 @@ func generatePhase2(cli CLI) {
 		originalDictGPUArrayLengths[i] = uint32(len(word))
 	}
 
-	lastBestFitness := rules[0].Fitness + 1000
+	lastBestFitness := rules[0].Fitness
 	var bestRule *ruleObj
+	var hashedWords *[]uint64
+
 	for lastBestFitness > 0 {
-		rules, bestRule = processRuleRound(
+		rules, bestRule, hashedWords = processRuleRound(
 			rules,
 			deviceCount,
 			&originalDictGPUArray,
@@ -451,52 +534,17 @@ func generatePhase2(cli CLI) {
 			&compareDictHashes,
 			originalDictCount,
 			compareDictCount,
+			lastBestFitness,
 		)
-		log.Printf("New candidate %d with score: %d", bestRule.ID, bestRule.LastFitness)
+		//log.Printf("New candidate %d with score: %d", bestRule.ID, bestRule.LastFitness)
 		lastBestFitness = bestRule.LastFitness
 		rules[bestRule.ID-1].LastFitness = 0 // ID starts at 1
 
-		func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			CUDASetDevice(0)
-			d_originalDict, d_originalDictLengths, d_originalHashes, d_compareHashes, stream := CUDAInitialize(&originalDictGPUArray, &originalDictGPUArrayLengths, &originalHashes, originalDictCount, &compareDictHashes, compareDictCount)
-			func() {
-				// Initialize processed variables for this worker
-				d_processedDict, d_processedDictLengths, d_hitCount := CUDAInitializeProcessed(originalDictCount, stream)
-
-				hashes := make([]uint64, originalDictCount)
-				d_hashes := CUDAInitializeHashHits(&hashes, originalDictCount, stream)
-				hashTable := make([]bool, originalDictCount*100)
-				d_hashTable := CUDAInitializeHashTable(&hashTable, originalDictCount*100, stream)
-				defer func(d_originalDict *C.char, d_originalDictLengths *C.int, d_originalHashes *C.uint64_t, d_compareHashes *C.uint64_t, d_processedDict *C.char, d_processedDictLengths *C.int, d_hitCount *C.uint64_t, d_hashes *C.uint64_t, d_hashTable *C.bool, stream C.cudaStream_t) {
-					CUDADeinitialize(d_originalDict, d_originalDictLengths, stream)
-					CUDADeinitializeHashes(d_originalHashes, d_compareHashes, stream)
-					CUDADeinitializeHashHits(d_hashes, stream)
-					CUDADeinitializeHashTable(d_hashTable, stream)
-					CUDADeinitializeProcessed(d_processedDict, d_processedDictLengths, d_hitCount, stream)
-					CUDADeinitializeStream(stream)
-				}(d_originalDict, d_originalDictLengths, d_originalHashes, d_compareHashes, d_processedDict, d_processedDictLengths, d_hitCount, d_hashes, d_hashTable, stream)
-
-				// Initialize processed variables for this worker
-				// Process each rule received from the channel and binary search the results against the original wordlist
-				// to extract new entries that don't already exist. originalHashes lives per gpu device
-				hashedWords := CUDASingleRuleHashed(
-					&bestRule.RuleLine,
-					d_originalDict, d_originalDictLengths,
-					d_processedDict, d_processedDictLengths,
-					d_originalHashes, originalDictCount,
-					d_compareHashes, compareDictCount,
-					d_hitCount, d_hashes, d_hashTable,
-					stream,
-				)
-				print("Cleaning words...")
-				compareDictHashes = RemoveElements(compareDictHashes, hashedWords)
-				compareDictCountNew := len(compareDictHashes)
-				log.Printf("%d new words found.", compareDictCount-compareDictCountNew)
-				appendScoreToFile(cli.OutputFile, uint64(compareDictCount-compareDictCountNew), bestRule)
-				compareDictCount = compareDictCountNew
-			}()
-		}()
+		print("Cleaning words...")
+		compareDictHashes = cleanWords(&compareDictHashes, hashedWords)
+		compareDictCountNew := len(compareDictHashes)
+		log.Printf("%d new words found.", compareDictCount-compareDictCountNew)
+		appendScoreToFile(cli.OutputFile, uint64(compareDictCount-compareDictCountNew), bestRule)
+		compareDictCount = compareDictCountNew
 	}
 }

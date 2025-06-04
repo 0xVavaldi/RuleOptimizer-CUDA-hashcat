@@ -112,9 +112,8 @@ void allocateHashesMemoryOnGPU(uint64_t **d_originalHashes, int originalCount, u
 void allocateHashHitsMemoryOnGPU(uint64_t **d_hashes, uint64_t *h_hashes, int64_t numWords, cudaStream_t stream);
 void allocateHashTableMemoryOnGPU(bool **d_hashTable, bool *h_hashTable, int64_t hashTableSize, cudaStream_t stream);
 
-
-void computeXXHashesWithCheck(char *processedDict, int *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, const uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, bool *hashTable, cudaStream_t stream);
 void computeXXHashesWithHits(char *processedDict, int *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, bool *hashTable, cudaStream_t stream);
+void computeXXHashesWithCount(char *processedDict, int *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, bool *hashTable, cudaStream_t stream);
 
 void ResetProcessedDictMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hitCount, int numWords, cudaStream_t stream);
 void ResetProcessedDictHashedMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hitCount, int numWords, uint64_t **d_hashes, bool **d_hashTable, cudaStream_t stream);
@@ -1397,7 +1396,7 @@ func CUDASingleRuleScore(ruleLine *[]Rule,
 	}
 
 	// Synchronize and convert to usable so we can cleanly get rid of memory.
-	C.computeXXHashesWithCheck(
+	C.computeXXHashesWithCount(
 		d_processedDict, d_processedDictLengths, 0,
 		d_originalHashes, C.int(originalDictCount),
 		d_compareHashes, C.int(compareHashCount),
@@ -1406,11 +1405,19 @@ func CUDASingleRuleScore(ruleLine *[]Rule,
 		d_hashTable,
 		stream,
 	)
-
 	var hits uint64
 	C.streamSynchronize(stream)
 	C.copyMemoryBackToHost((*C.uint64_t)(unsafe.Pointer(&hits)), d_hitCount, stream)
 	return hits
+}
+
+func CUDAGetHashes(hits uint64, d_hashes *C.uint64_t, stream C.cudaStream_t) []uint64 {
+	C.streamSynchronize(stream)
+	h_hashes := (*C.uint64_t)(C.calloc(C.size_t(hits), C.sizeof_uint64_t))
+	C.copyHashMemoryBackToHost(h_hashes, &d_hashes, C.int(hits), stream)
+	hashes := convertProcessedHashes(h_hashes, C.int(hits))
+	defer C.free(unsafe.Pointer(h_hashes))
+	return hashes
 }
 
 func CUDASingleRuleHashed(ruleLine *[]Rule,
@@ -1623,9 +1630,12 @@ func CUDASingleRuleHashed(ruleLine *[]Rule,
 		stream,
 	)
 
-	h_hashes := (*C.uint64_t)(C.calloc(C.size_t(originalDictCount), C.sizeof_uint64_t))
-	C.copyHashMemoryBackToHost(h_hashes, &d_hashes, C.int(originalDictCount), stream)
-	hashes := convertProcessedHashes(h_hashes, C.int(originalDictCount))
+	var hits uint64
+	C.streamSynchronize(stream)
+	C.copyMemoryBackToHost((*C.uint64_t)(unsafe.Pointer(&hits)), d_hitCount, stream)
+	h_hashes := (*C.uint64_t)(C.calloc(C.size_t(hits), C.sizeof_uint64_t))
+	C.copyHashMemoryBackToHost(h_hashes, &d_hashes, C.int(hits), stream)
+	hashes := convertProcessedHashes(h_hashes, C.int(hits))
 	defer C.free(unsafe.Pointer(h_hashes))
 	return hashes
 }
@@ -1896,11 +1906,13 @@ func loadHashedWordlist(inputFile string) []uint64 {
 	wordlistBar.Close()
 	println()
 
-	println("Finalizing Preparation")
+	print("Finalizing Preparation 1/3")
 	close(passwordQueue)
 	wg.Wait()
+	print("...2/3")
 	close(resultQueue)
 	wgg.Wait()
 	sort.Slice(resultSlice, func(i, j int) bool { return resultSlice[i] < resultSlice[j] })
+	println("...3/3")
 	return resultSlice
 }

@@ -2,6 +2,9 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <thrust/sort.h>
+#include <thrust/unique.h>
+#include <thrust/execution_policy.h>
 
 #ifdef _WIN32
 #define DLL_EXPORT __declspec(dllexport)
@@ -943,6 +946,51 @@ __global__ void toggleWithNSeparatorKernel(char* words, int* lengths, char separ
 }
 
 
+__global__ void countUniqueHashesKernel(uint64_t* hashes, int* flags, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        uint64_t current = hashes[idx];
+        int isUnique = 1;
+
+        for (int i = 0; i < idx; i++) {
+            if (hashes[i] == current) {
+                isUnique = 0;
+                break;
+            }
+        }
+        flags[idx] = isUnique;
+    }
+}
+
+__device__ void warpReduce(volatile int* sdata, int tid) {
+    sdata[tid] += sdata[tid + 32];
+    sdata[tid] += sdata[tid + 16];
+    sdata[tid] += sdata[tid + 8];
+    sdata[tid] += sdata[tid + 4];
+    sdata[tid] += sdata[tid + 2];
+    sdata[tid] += sdata[tid + 1];
+}
+
+__global__ void sumReduction(int* input, int* output, int size) {
+    extern __shared__ int sdata[];
+
+    unsigned int tid = threadIdx.x;
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    sdata[tid] = (i < size) ? input[i] : 0;
+    __syncthreads();
+
+    for (unsigned int s = blockDim.x/2; s > 32; s >>= 1) {
+        if (tid < s) {
+            sdata[tid] += sdata[tid + s];
+        }
+        __syncthreads();
+    }
+
+    if (tid < 32) warpReduce(sdata, tid);
+
+    if (tid == 0) output[blockIdx.x] = sdata[0];
+}
 
 //---------------------------------------------------------------------
 // Host Wrappers to Launch Kernels
@@ -1374,7 +1422,7 @@ void ResetProcessedDictHashedMemoryOnGPU(
     CUDA_CHECK(cudaMemcpyAsync(*d_processedDictLengths, *d_originalDictLengths, originalDictCount * sizeof(int), cudaMemcpyDeviceToDevice , stream));
 
     CUDA_CHECK(cudaMemsetAsync(*d_hashes, 0, static_cast<int64_t>(originalDictCount) * sizeof(uint64_t), stream));
-    CUDA_CHECK(cudaMemsetAsync(*d_hashTable, 0, static_cast<int64_t>(originalDictCount) * 100 * sizeof(bool), stream));
+    CUDA_CHECK(cudaMemsetAsync(*d_hashTable, 0, static_cast<int64_t>(originalDictCount) * 1 * sizeof(bool), stream));
     cudaStreamSynchronize(stream);
 }
 
@@ -1461,8 +1509,15 @@ __global__ void xxhashKernel(char* d_processedDict, int* d_processedDictLengths 
     hashes[idx] = xxhash64(input, d_processedDictLengths[idx], seed);
 }
 
+// Exported function to launch the kernel
+DLL_EXPORT
+void computeXXHashes(char *d_processedDict, int *d_processedDictLengths, uint64_t seed, uint64_t* d_hashes, int numWords, cudaStream_t stream) {
+    int blocks = (numWords + THREADS - 1) / THREADS;
+    xxhashKernel<<<blocks, THREADS, 0, stream>>>(d_processedDict, d_processedDictLengths , seed, d_hashes, numWords);
+    cudaStreamSynchronize(stream);
+}
 
-__global__ void xxhashWithCheckKernel(
+__global__ void xxhashWithHitsKernel(
     char* d_processedDict,
     int* d_processedLengths,
     uint64_t seed,
@@ -1480,106 +1535,19 @@ __global__ void xxhashWithCheckKernel(
     // Compute hash
     char* word = &d_processedDict[idx * MAX_LEN];
     const uint64_t hash = xxhash64(word, d_processedLengths[idx], seed);
-    uint64_t hash2 = 0;
-
     // Atomic increment if valid hit
-    bool alreadyCounted = false;
-    int posHashTable = hash % (originalCount * 100);
-    if(d_hashTable[posHashTable]) { // quick test O(1)
-        hash2 = xxhash64(word, d_processedLengths[idx], 1);
-        int posHashTable2 = hash2 % (originalCount * 100);
-        if(d_hashTable[posHashTable2]) { // double quick test O(1)
-            for (uint64_t i = 0; i < *hitCount; i++) { // verify O(n)
-                if (d_matchingHashes[i] == hash) {
-                    alreadyCounted = true;
-                    break;
-                }
-            }
-        }
+    const bool inCompare = binarySearchGPU(d_compareHashes, compareCount, hash);
+    if (inCompare) {
+        uint64_t pos = atomicAdd(reinterpret_cast<unsigned long long*>(hitCount), 1ULL);
+        d_matchingHashes[pos] = hash;
     }
-
-    if (!alreadyCounted) {
-        const bool inOriginal = binarySearchGPU(d_originalHashes, originalCount, hash);
-        const bool inCompare = binarySearchGPU(d_compareHashes, compareCount, hash);
-        if (inCompare && !inOriginal) {
-            uint64_t pos = atomicAdd(reinterpret_cast<unsigned long long*>(hitCount), 1ULL);
-            d_matchingHashes[pos] = hash;
-            d_hashTable[posHashTable] = true;
-
-            if(hash2 == 0) {
-                hash2 = xxhash64(word, d_processedLengths[idx], 1);
-            }
-            int posHashTable2 = hash2 % (originalCount * 100);
-            d_hashTable[posHashTable2] = true;
-        }
-    }
-}
-
-__global__ void xxhashWithHitsKernel(
-    char* d_processedDict,
-    int* d_processedLengths,
-    uint64_t seed,
-    const uint64_t* d_originalHashes,
-    int originalCount,
-    const uint64_t* d_compareHashes,
-    int compareCount,
-    uint64_t* hitCount,
-    uint64_t* d_matchingHashes,  // New output array for matching hashes
-    bool* d_hashTable
-) {
-    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= originalCount) return;
-
-    // Compute hash
-    char* word = &d_processedDict[idx * MAX_LEN];
-    const uint64_t hash = xxhash64(word, d_processedLengths[idx], seed);
-    uint64_t hash2 = 0;
-
-    // Atomic increment if valid hit
-    bool alreadyCounted = false;
-    int posHashTable = hash % (originalCount * 100);
-    if(d_hashTable[posHashTable]) { // quick test O(1)
-        hash2 = xxhash64(word, d_processedLengths[idx], 1);
-        int posHashTable2 = hash2 % (originalCount * 100);
-        if(d_hashTable[posHashTable2]) { // double quick test O(1)
-            for (uint64_t i = 0; i < *hitCount; i++) { // verify O(n)
-                if (d_matchingHashes[i] == hash) {
-                    alreadyCounted = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (!alreadyCounted) {
-        const bool inOriginal = binarySearchGPU(d_originalHashes, originalCount, hash);
-        const bool inCompare = binarySearchGPU(d_compareHashes, compareCount, hash);
-        if (inCompare && !inOriginal) {
-            uint64_t pos = atomicAdd(reinterpret_cast<unsigned long long*>(hitCount), 1ULL);
-            d_matchingHashes[pos] = hash;
-            d_hashTable[posHashTable] = true;
-
-            if(!hash2) {
-                hash2 = xxhash64(word, d_processedLengths[idx], 1);
-            }
-            int posHashTable2 = hash2 % (originalCount * 100);
-            d_hashTable[posHashTable2] = true;
-        }
-    }
-}
-
-// Exported function to launch the kernel
-DLL_EXPORT
-void computeXXHashes(char *d_processedDict, int *d_processedDictLengths, uint64_t seed, uint64_t* d_hashes, int numWords, cudaStream_t stream) {
-    int blocks = (numWords + THREADS - 1) / THREADS;
-    xxhashKernel<<<blocks, THREADS, 0, stream>>>(d_processedDict, d_processedDictLengths , seed, d_hashes, numWords);
-    cudaStreamSynchronize(stream);
 }
 
 DLL_EXPORT
-void computeXXHashesWithCheck(
+void computeXXHashesWithCount(
     char *d_processedDict, int *d_processedDictLengths, uint64_t seed,
-    const uint64_t* d_originalHashes, int originalHashCount,
+    const uint64_t* d_originalHashes,
+    int originalHashCount,
     const uint64_t* d_compareHashes, int compareHashCount,
     uint64_t* d_hitCount,
     uint64_t* d_matchingHashes,
@@ -1587,14 +1555,21 @@ void computeXXHashesWithCheck(
     cudaStream_t stream
 ) {
     int blocks = (originalHashCount + THREADS - 1) / THREADS;
-    xxhashWithCheckKernel<<<blocks, THREADS, 0, stream>>>(
+    xxhashWithHitsKernel<<<blocks, THREADS, 0, stream>>>(
         d_processedDict, d_processedDictLengths, seed,
         d_originalHashes, originalHashCount,
         d_compareHashes, compareHashCount,
         d_hitCount, d_matchingHashes, d_hashTable
     );
-}
 
+//     auto new_end = thrust::unique_count(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
+    auto exec_policy = thrust::cuda::par.on(stream);  // allocate to stream
+    thrust::sort(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
+    auto new_end = thrust::unique(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
+    size_t unique_count = new_end - d_matchingHashes;
+    cudaMemcpyAsync(d_hitCount, &unique_count, sizeof(uint64_t), cudaMemcpyHostToDevice, stream);
+}
+s
 DLL_EXPORT
 void computeXXHashesWithHits(
     char *d_processedDict, int *d_processedDictLengths, uint64_t seed,
@@ -1613,9 +1588,12 @@ void computeXXHashesWithHits(
         d_compareHashes, compareHashCount,
         d_hitCount, d_matchingHashes, d_hashTable
     );
+
+//     auto new_end = thrust::unique_count(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
+    auto exec_policy = thrust::cuda::par.on(stream);  // allocate to stream
+    thrust::sort(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
+    auto new_end = thrust::unique(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
+    size_t unique_count = new_end - d_matchingHashes;
+    cudaMemcpyAsync(d_hitCount, &unique_count, sizeof(uint64_t), cudaMemcpyHostToDevice, stream);
 }
-
-
-
-
 } // extern "C"
