@@ -1563,13 +1563,15 @@ void computeXXHashesWithCount(
     );
 
 //     auto new_end = thrust::unique_count(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
+    uint64_t hitCount;
+    cudaMemcpyAsync(&hitCount, d_hitCount, sizeof(uint64_t), cudaMemcpyDeviceToHost, stream);
     auto exec_policy = thrust::cuda::par.on(stream);  // allocate to stream
-    thrust::sort(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
-    auto new_end = thrust::unique(exec_policy, d_matchingHashes, d_matchingHashes + originalHashCount);
+    thrust::sort(exec_policy, d_matchingHashes, d_matchingHashes + hitCount);
+    auto new_end = thrust::unique(exec_policy, d_matchingHashes, d_matchingHashes + hitCount);
     size_t unique_count = new_end - d_matchingHashes;
     cudaMemcpyAsync(d_hitCount, &unique_count, sizeof(uint64_t), cudaMemcpyHostToDevice, stream);
 }
-s
+
 DLL_EXPORT
 void computeXXHashesWithHits(
     char *d_processedDict, int *d_processedDictLengths, uint64_t seed,

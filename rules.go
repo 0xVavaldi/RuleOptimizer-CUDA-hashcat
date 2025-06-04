@@ -195,17 +195,15 @@ func convertProcessedDict(h_processedDict *C.char, h_processedDictLengths *C.int
 	return newWords
 }
 
-func convertProcessedHashes(h_hashes *C.uint64_t, originalDictCount C.int) []uint64 {
+func convertProcessedHashes(h_hashes *C.uint64_t, hitCount C.int) []uint64 {
 	// Convert C pointers to Go slices
-	hashSlice := (*[1 << 30]C.uint64_t)(unsafe.Pointer(h_hashes))[:originalDictCount:originalDictCount]
-
+	hashSlice := unsafe.Slice((*C.uint64_t)(unsafe.Pointer(h_hashes)), int(hitCount))
 	var newHashes []uint64
-	for i := 0; i < int(originalDictCount); i++ {
+	for i := 0; i < int(hitCount); i++ {
 		if hashSlice[i] != 0 {
 			newHashes = append(newHashes, uint64(hashSlice[i]))
 		}
 	}
-
 	return newHashes
 }
 
@@ -1412,7 +1410,6 @@ func CUDASingleRuleScore(ruleLine *[]Rule,
 }
 
 func CUDAGetHashes(hits uint64, d_hashes *C.uint64_t, stream C.cudaStream_t) []uint64 {
-	C.streamSynchronize(stream)
 	h_hashes := (*C.uint64_t)(C.calloc(C.size_t(hits), C.sizeof_uint64_t))
 	C.copyHashMemoryBackToHost(h_hashes, &d_hashes, C.int(hits), stream)
 	hashes := convertProcessedHashes(h_hashes, C.int(hits))

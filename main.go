@@ -148,7 +148,7 @@ func appendScoreToFile(ruleFileName string, hits uint64, rule *ruleObj) {
 }
 
 func processRuleRound(
-	rules []ruleObj, deviceCount int, originalDictGPUArray *[]byte, originalDictGPUArrayLengths *[]uint32, originalHashes *[]uint64, compareDictHashes *[]uint64, originalDictCount int, compareDictCount int, lastFitness uint64) ([]ruleObj, *ruleObj, *[]uint64) {
+	rules []ruleObj, deviceCount int, originalDictGPUArray *[]byte, originalDictGPUArrayLengths *[]uint32, originalHashes *[]uint64, compareDictHashes *[]uint64, originalDictCount int, compareDictCount int, lastFitness uint64) ([]ruleObj, *ruleObj, []uint64) {
 	deviceCount = CUDAGetDeviceCount()
 	ruleChan := make(chan *ruleObj, deviceCount)
 	var writerMutex sync.Mutex
@@ -216,12 +216,13 @@ func processRuleRound(
 						writerMutex.Lock()
 						if hits == currentBestFitnessRule.LastFitness {
 							// If it's smaller in operations with the same hits, take that instead
-							if len(currentBestFitnessRule.RuleLine) > len(rule.RuleLine) {
+							if len(rule.RuleLine) < len(currentBestFitnessRule.RuleLine) {
 								currentBestFitnessRule = rule
 								hashedWords = CUDAGetHashes(hits, d_hashes, stream)
 							}
 						} else if hits > currentBestFitnessRule.LastFitness {
 							currentBestFitnessRule = rule
+							hashedWords = CUDAGetHashes(hits, d_hashes, stream)
 						}
 						writerMutex.Unlock()
 					}
@@ -269,7 +270,7 @@ func processRuleRound(
 	wg.Wait()
 	processBar.Close()
 	processBar.Finish()
-	return rules, currentBestFitnessRule, &hashedWords
+	return rules, currentBestFitnessRule, hashedWords
 }
 
 func processRuleFile(
@@ -522,7 +523,7 @@ func generatePhase2(cli CLI) {
 
 	lastBestFitness := rules[0].Fitness
 	var bestRule *ruleObj
-	var hashedWords *[]uint64
+	var hashedWords []uint64
 
 	for lastBestFitness > 0 {
 		rules, bestRule, hashedWords = processRuleRound(
@@ -540,9 +541,9 @@ func generatePhase2(cli CLI) {
 		lastBestFitness = bestRule.LastFitness
 		rules[bestRule.ID-1].LastFitness = 0 // ID starts at 1
 
-		print("Cleaning words...")
-		compareDictHashes = cleanWords(&compareDictHashes, hashedWords)
+		compareDictHashes = cleanWords(&compareDictHashes, &hashedWords)
 		compareDictCountNew := len(compareDictHashes)
+		print()
 		log.Printf("%d new words found.", compareDictCount-compareDictCountNew)
 		appendScoreToFile(cli.OutputFile, uint64(compareDictCount-compareDictCountNew), bestRule)
 		compareDictCount = compareDictCountNew
