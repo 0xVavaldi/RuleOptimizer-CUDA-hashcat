@@ -916,6 +916,75 @@ func ConvertFromHashcat(lineCounter uint64, rawLine string) ([]Rule, error) {
 	return rules, nil
 }
 
+func ConvertToHashcat(rules []Rule) (string, error) {
+	var hashcatRule strings.Builder
+
+	for i, rule := range rules {
+		if i > 0 {
+			hashcatRule.WriteString("\t")
+		}
+
+		paramCount, err := ParameterCountRule(rule.Function)
+		if err != nil {
+			return "", fmt.Errorf("error getting parameter count for function %s: %v", rule.Function, err)
+		}
+
+		switch paramCount {
+		case 0:
+			hashcatRule.WriteString(rule.Function)
+
+		case 1:
+			// Handle hex encoding if parameter contains non-printable characters or special chars
+			param := rule.Parameter1
+			if needsHexEncoding(param) {
+				hashcatRule.WriteString(fmt.Sprintf("%s\\x%02x", rule.Function, param[0]))
+			} else {
+				hashcatRule.WriteString(rule.Function + param)
+			}
+
+		case 2:
+			// Handle both parameters
+			param1 := rule.Parameter1
+			param2 := rule.Parameter2
+
+			// Check if either parameter needs hex encoding
+			needsHex1 := needsHexEncoding(param1)
+			needsHex2 := needsHexEncoding(param2)
+
+			if needsHex1 || needsHex2 {
+				// Use hex notation for one or both parameters
+				hex1 := fmt.Sprintf("\\x%02x", param1[0])
+				hex2 := fmt.Sprintf("\\x%02x", param2[0])
+				hashcatRule.WriteString(fmt.Sprintf("%s%s%s", rule.Function, hex1, hex2))
+			} else if len(param1) > 1 || len(param2) > 1 {
+				// Use slash notation for multi-byte parameters
+				// Escape slashes in parameters
+				escapedParam1 := strings.ReplaceAll(param1, "/", "\\/")
+				escapedParam2 := strings.ReplaceAll(param2, "/", "\\/")
+				hashcatRule.WriteString(fmt.Sprintf("%s/%s/%s", rule.Function, escapedParam1, escapedParam2))
+			} else {
+				// Simple ASCII characters
+				hashcatRule.WriteString(rule.Function + param1 + param2)
+			}
+
+		default:
+			return "", fmt.Errorf("unsupported parameter count %d for function %s", paramCount, rule.Function)
+		}
+	}
+	return hashcatRule.String(), nil
+}
+
+func needsHexEncoding(param string) bool {
+	if len(param) == 0 {
+		return false
+	}
+	if len(param) == 1 {
+		c := param[0]
+		return c < 32 || c > 126 || c == '\\' || c == ' '
+	}
+	return true
+}
+
 // Returns a format that's easily printable.
 func (r *Rule) PrintFormat() string {
 	rule1Copy := r.Parameter1
@@ -1768,6 +1837,86 @@ func loadRuleScores(inputFile string) []ruleObj {
 				ruleObject, _ := ConvertFromHashcat(rawLineObj.ID, rawLineObj.line)
 				hits := make(map[uint64]struct{})
 				ruleOutput <- ruleObj{rawLineObj.ID, fitness, fitness, ruleObject, false, hits, sync.Mutex{}}
+			}
+		}()
+	}
+
+	ruleBar := progressbar.NewOptions(ruleLines,
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionThrottle(500*time.Millisecond),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetWidth(25),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowCount(),
+	)
+	file, err := os.Open(inputFile)
+	if err != nil {
+		log.Println("Error opening file:", err)
+		return []ruleObj{}
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	ruleLineCounter := uint64(1)
+
+	for scanner.Scan() {
+		lineObject := new(lineObj)
+		lineObject.ID = ruleLineCounter
+		lineObject.line = scanner.Text()
+		if len(lineObject.line) == 0 {
+			continue
+		}
+		ruleQueue <- *lineObject
+		ruleLineCounter++
+		if ruleLineCounter%10000 == 0 {
+			ruleBar.Add(10000)
+		}
+	}
+	ruleBar.Add(int(ruleLineCounter))
+	close(ruleQueue)
+	go func() {
+		wg.Wait()
+		close(ruleOutput)
+	}()
+
+	// Step 1: Consume the channel into a slice
+	var sortedRules []ruleObj
+	for obj := range ruleOutput {
+		sortedRules = append(sortedRules, obj)
+	}
+
+	// Step 2: Sort the slice by ID
+	sort.Slice(sortedRules, func(i, j int) bool {
+		return sortedRules[i].ID < sortedRules[j].ID
+	})
+	ruleBar.Finish()
+	ruleBar.Close()
+	println()
+	return sortedRules
+}
+
+func loadStateScores(inputFile string) []ruleObj {
+	defer timer("loadStateScores")()
+	ruleLines, _ := lineCounter(inputFile)
+	ruleQueue := make(chan lineObj, 100)
+	ruleOutput := make(chan ruleObj, ruleLines)
+	threadCount := runtime.NumCPU()
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < threadCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for rawLineObj := range ruleQueue {
+				fitness := parseUint64(strings.SplitN(rawLineObj.line, "\t", 3)[0])
+				lastFitness := parseUint64(strings.SplitN(rawLineObj.line, "\t", 3)[1])
+				rawLineObj.line = strings.SplitN(rawLineObj.line, "\t", 3)[2]
+				rawLineObj.line = strings.ReplaceAll(rawLineObj.line, "\t", " ")
+
+				ruleObject, _ := ConvertFromHashcat(rawLineObj.ID, rawLineObj.line)
+				hits := make(map[uint64]struct{})
+				ruleOutput <- ruleObj{rawLineObj.ID, fitness, lastFitness, ruleObject, false, hits, sync.Mutex{}}
 			}
 		}()
 	}
