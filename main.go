@@ -21,22 +21,22 @@ import (
 
 type CLI struct {
 	Score struct {
-		Wordlist   string `arg:"" help:"Path to wordlist file"`
-		Target     string `arg:"" help:"Path to target data file"`
-		RuleFile   string `short:"r" help:"Rule file to analyse."`
-		OutputFile string `short:"o" help:"Score File to output results to."`
+		Wordlist   string `arg:"" help:"Path to wordlist file" placeholder:"small_wordlist.txt"`
+		Target     string `arg:"" help:"Path to target data file" placeholder:"big_wordlist.txt"`
+		RuleFile   string `short:"r" help:"Rule file to analyse." required:"" placeholder:"best66.rule"`
+		OutputFile string `short:"o" help:"Score File to output results to." required:"" placeholder:"best66.score"`
 	} `cmd:"" help:"Score rule files."`
 	Evaluate struct {
 		Wordlist   string `arg:"" help:"Path to wordlist file"`
 		Target     string `arg:"" help:"Path to target data file"`
-		ScoreFile  string `short:"s" help:"Aggregated score file TSV."`
-		OutputFile string `short:"o" help:"Score File to output results to."`
+		ScoreFile  string `short:"s" help:"Aggregated score file TSV." required:"" placeholder:"best66.score"`
+		OutputFile string `short:"o" help:"Score File to output results to." required:"" placeholder:"best66.score_optimized"`
 	} `cmd:"" help:"Optimize a score file."`
 	Simulate struct {
 		Wordlist   string `arg:"" help:"Path to wordlist file"`
 		Target     string `arg:"" help:"Path to target data file"`
-		RuleFile   string `short:"r" help:"Rule file to analyse."`
-		OutputFile string `short:"o" help:"Score File to output results to."`
+		RuleFile   string `short:"r" help:"Rule file to analyse." required:"" placeholder:"best66.rule"`
+		OutputFile string `short:"o" help:"Score File to output results to." required:"" placeholder:"best66.score_optimized"`
 	} `cmd:"" help:"Run a simulation on the target list."`
 }
 
@@ -78,8 +78,9 @@ func main() {
 		os.Exit(-1)
 	}
 
+	println(ctx.Command())
 	switch ctx.Command() {
-	case "score":
+	case "score <wordlist> <target>":
 		score(cli)
 		break
 	case "evaluate":

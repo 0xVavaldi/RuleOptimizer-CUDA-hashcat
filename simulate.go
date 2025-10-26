@@ -1,74 +1,104 @@
 package main
 
+/*
+#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/include"
+#cgo LDFLAGS: -L. -lrules -L"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/lib/x64" -lcudart -lcuda
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+void allocateDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void pushDictionary(char *h_wordlist, uint8_t *h_wordlistLengths, char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void overwriteDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, char **d_overwrite, uint8_t **d_overwriteLengths, int wordlistCount, cudaStream_t stream);
+void resetDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void pullDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, char *h_wordlist, uint8_t *h_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void deallocateDictionary(char *d_wordlist, uint8_t *d_wordlistLengths, cudaStream_t stream);
+
+void allocateHashes(uint64_t **d_hashes, int hashCount, cudaStream_t stream);
+void pushHashes(uint64_t *h_hashes, uint64_t **d_hashes, int hashCount, cudaStream_t stream);
+void overwriteHashes(uint64_t **d_hashes, uint64_t **d_overwrite, int hashCount, cudaStream_t stream);
+void pullHashes(uint64_t **d_hashes, uint64_t *h_hashes, int hashCount, cudaStream_t stream);
+void deallocateHashes(uint64_t *d_hashes, cudaStream_t stream);
+
+void initializeHitCount(uint64_t **d_hitCount, cudaStream_t stream);
+void pullHitCount(uint64_t *d_hitCount, uint64_t* h_hitCount, cudaStream_t stream);
+void resetHitCount(uint64_t **d_hitCount, cudaStream_t stream);
+void deallocateHitCount(uint64_t *d_hitCount, cudaStream_t stream);
+
+void computeXXHashes(char* d_words, int* d_lengths, uint64_t seed, uint64_t* d_hashes, int numWords);
+void computeXXHashesWithHits(char *processedDict, uint8_t *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, cudaStream_t stream);
+uint64_t computeXXHashesWithCount(char *processedDict, uint8_t *processedLengths, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, uint64_t seed, cudaStream_t stream);
+void computeCountFast(char *d_processedDict, uint8_t *d_processedLengths, char *d_target, uint8_t *d_targetLengths, char *d_matching, uint8_t *d_matchingLengths, int wordlistCount, int targetCount, uint64_t *hitCount, cudaStream_t stream, bool storeHits);
+*/
+import "C"
 import (
-	"bufio"
 	"log"
-	"os"
 	"runtime"
 )
 
 func generateSimulate(cli CLI) {
-	originalDictName := cli.Simulate.Wordlist
-	originalHashes := loadHashedWordlist(originalDictName)
-	originalDictCount := len(originalHashes)
-	originalDict := make([]string, 0, originalDictCount)
 
-	compareDictName := cli.Simulate.Target
-	compareDictHashes := loadHashedWordlist(compareDictName)
-	compareDictCount := len(compareDictHashes)
-
-	file, err := os.Open(originalDictName)
-	if err != nil {
-		log.Println("Error opening file:", err)
-		return
-	}
-	defer file.Close()
-
-	log.Println("Loading Input Wordlist")
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		input := scanner.Text()
-		if len(input) <= MaxLen {
-			originalDict = append(originalDict, input)
-		}
-	}
-	originalDictCount = len(originalDict)
-
+	log.Println("Loading Wordlist")
+	wordlist, wordlistLengths, wordlistCount := loadWordlist(cli.Simulate.Wordlist)
+	log.Println("Loading Target")
+	targetHashes := loadHashedWordlist(cli.Simulate.Target)
+	targetCount := len(targetHashes)
 	log.Println("Loading Rules")
-	rules := loadRulesFast(cli.Simulate.RuleFile)
+	rules := loadRulesFast(cli.Score.RuleFile)
+
 	log.Printf("Loaded %d Rules", len(rules))
+
+	// Convert to 2d byte array in chunks of size MaxLen
+	wordlistBytes := make([]byte, (wordlistCount)*MaxLen)
+	for i, word := range wordlist {
+		copy(wordlistBytes[i*MaxLen:], word)
+	}
+	wordlist = nil
 
 	deviceID := 0
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	CUDASetDevice(deviceID)
+	stream := CUDAInitializeStream()
+	gpuWordlist, gpuWordlistLengths := cudaInitializeDict(&wordlistBytes, &wordlistLengths, wordlistCount, stream)
 
-	originalDictGPUArray := make([]byte, originalDictCount*MaxLen)
-	originalDictGPUArrayLengths := make([]uint32, originalDictCount)
-	for i, word := range originalDict {
-		copy(originalDictGPUArray[i*MaxLen:], word)
-		originalDictGPUArrayLengths[i] = uint32(len(word))
-	}
+	processedHashes := make([]uint64, wordlistCount)
+	gpuProcessed, gpuProcessedLengths := cudaInitializeDict(&wordlistBytes, &wordlistLengths, wordlistCount, stream)
+	gpuProcessedHashes := cudaInitializeHashes(&processedHashes, wordlistCount, stream)
 
-	// Initialize GPU memory once
-	d_originalDict, d_originalDictLengths, d_originalHashes, d_compareHashes, stream := CUDAInitialize(&originalDictGPUArray, &originalDictGPUArrayLengths, &originalHashes, originalDictCount, &compareDictHashes, compareDictCount)
+	gpuFoundHashes := cudaInitializeHashes(&processedHashes, targetCount, stream)
+	gpuTargetHashes := cudaInitializeHashes(&targetHashes, targetCount, stream)
+	gpuHitCount := cudaInitializeHitCount(stream)
 
-	// Initialize processing buffers once
-	hashes := make([]uint64, originalDictCount)
-	d_hashes := CUDAInitializeHashHits(&hashes, originalDictCount, stream)
-	hashTable := make([]bool, originalDictCount)
-	d_hashTable := CUDAInitializeHashTable(&hashTable, originalDictCount, stream)
-	d_processedDict, d_processedDictLengths, d_hitCount := CUDAInitializeProcessed(originalDictCount, stream)
-
-	// Defer cleanup
-	defer func() {
-		CUDADeinitialize(d_originalDict, d_originalDictLengths, stream)
-		CUDADeinitializeHashes(d_originalHashes, d_compareHashes, stream)
-		CUDADeinitializeHashHits(d_hashes, stream)
-		CUDADeinitializeHashTable(d_hashTable, stream)
-		CUDADeinitializeProcessed(d_processedDict, d_processedDictLengths, d_hitCount, stream)
+	// Clean up after we finish working
+	defer func(
+		gpuWordlist *C.char, gpuWordlistLengths *C.uint8_t,
+		gpuProcessed *C.char, gpuProcessedLengths *C.uint8_t,
+		gpuProcessedHashes *C.uint64_t,
+		gpuFoundHashes *C.uint64_t,
+		gpuTargetHashes *C.uint64_t,
+		gpuHitCount *C.uint64_t,
+		stream C.cudaStream_t,
+	) {
+		cudaDeinitializeDict(gpuWordlist, gpuWordlistLengths, stream)
+		cudaDeinitializeDict(gpuProcessed, gpuProcessedLengths, stream)
+		cudaDeinitializeHashes(gpuProcessedHashes, stream)
+		cudaDeinitializeHashes(gpuFoundHashes, stream)
+		cudaDeinitializeHashes(gpuTargetHashes, stream)
+		cudaDeinitializeHitCount(gpuHitCount, stream)
 		CUDADeinitializeStream(stream)
-	}()
+		runtime.UnlockOSThread()
+	}(
+		gpuWordlist, gpuWordlistLengths,
+		gpuProcessed, gpuProcessedLengths,
+		gpuProcessedHashes,
+		gpuFoundHashes,
+		gpuTargetHashes,
+		gpuHitCount,
+		stream,
+	)
 
 	log.Println("Starting simulation mode - processing rules in order")
 
@@ -78,35 +108,35 @@ func generateSimulate(cli CLI) {
 
 	// Process each rule sequentially without optimization
 	for i := range rules {
-		if compareDictCount == 0 {
+		if targetCount == 0 {
 			log.Println("All target words found, stopping simulation")
 			break
 		}
 
-		log.Printf("Processing rule %d/%d (remaining targets: %d)", i+1, len(rules), compareDictCount)
+		log.Printf("Processing rule %d/%d (remaining targets: %d)", i+1, len(rules), targetCount)
 
 		// Process single rule with existing GPU resources
 		rule := &rules[i]
 		hits := CUDASingleRuleScore(
 			&rule.RuleLine,
-			d_originalDict, d_originalDictLengths,
-			d_processedDict, d_processedDictLengths,
-			d_originalHashes, originalDictCount,
-			d_compareHashes, compareDictCount,
-			d_hitCount, d_hashes,
-			d_hashTable,
+			gpuWordlist, gpuWordlistLengths,
+			gpuProcessed, gpuProcessedLengths,
+			gpuProcessedHashes, wordlistCount,
+			gpuTargetHashes, targetCount,
+			gpuHitCount,
+			gpuFoundHashes,
 			stream,
 		)
 
 		if hits > 0 {
 			// Get the found hashes from GPU
-			hashedWords := CUDAGetHashes(hits, d_hashes, stream)
+			hashedWords := CUDAGetHashes(hits, gpuFoundHashes, stream)
 
 			// Remove found words from target and calculate hits
-			beforeCount := compareDictCount
-			compareDictHashes = cleanWords(&compareDictHashes, &hashedWords)
-			compareDictCount = len(compareDictHashes)
-			ruleHits := beforeCount - compareDictCount
+			beforeCount := targetCount
+			targetHashes = cleanWords(&targetHashes, &hashedWords)
+			targetCount = len(targetHashes)
+			ruleHits := beforeCount - targetCount
 
 			totalHits += uint64(ruleHits)
 			log.Printf("Rule %d found %d new words (total: %d)", i+1, ruleHits, totalHits)
@@ -120,10 +150,10 @@ func generateSimulate(cli CLI) {
 		// Progress update every 100 rules
 		if processedRules%100 == 0 {
 			log.Printf("Progress: %d/%d rules processed, %d total hits, %d targets remaining",
-				processedRules, len(rules), totalHits, compareDictCount)
+				processedRules, len(rules), totalHits, targetCount)
 		}
 	}
 
 	log.Printf("Simulation completed: %d rules processed, %d total hits, %d targets remaining",
-		processedRules, totalHits, compareDictCount)
+		processedRules, totalHits, targetCount)
 }

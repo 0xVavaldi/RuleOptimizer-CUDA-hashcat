@@ -4,8 +4,15 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"os"
+	"runtime"
+	"sort"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 func saveState(filename string, filenameHashes string, rules *[]ruleObj, compareDictHashes []uint64) error {
@@ -82,4 +89,84 @@ func loadCompareDictState(filenameHashes string) ([]uint64, error) {
 	}
 
 	return hashes, nil
+}
+
+func loadStateScores(inputFile string) []ruleObj {
+	defer timer("loadStateScores")()
+	ruleLines, _ := lineCounter(inputFile)
+	ruleQueue := make(chan lineObj, 100)
+	ruleOutput := make(chan ruleObj, ruleLines)
+	threadCount := runtime.NumCPU()
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < threadCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for rawLineObj := range ruleQueue {
+				fitness := parseUint64(strings.SplitN(rawLineObj.line, "\t", 3)[0])
+				lastFitness := parseUint64(strings.SplitN(rawLineObj.line, "\t", 3)[1])
+				rawLineObj.line = strings.SplitN(rawLineObj.line, "\t", 3)[2]
+				rawLineObj.line = strings.ReplaceAll(rawLineObj.line, "\t", " ")
+
+				ruleObject, _ := ConvertFromHashcat(rawLineObj.ID, rawLineObj.line)
+				hits := make(map[uint64]struct{})
+				ruleOutput <- ruleObj{rawLineObj.ID, fitness, lastFitness, ruleObject, false, hits, sync.Mutex{}}
+			}
+		}()
+	}
+
+	ruleBar := progressbar.NewOptions(ruleLines,
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionThrottle(500*time.Millisecond),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetWidth(25),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowCount(),
+	)
+	file, err := os.Open(inputFile)
+	if err != nil {
+		log.Println("Error opening file:", err)
+		return []ruleObj{}
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	ruleLineCounter := uint64(1)
+
+	for scanner.Scan() {
+		lineObject := new(lineObj)
+		lineObject.ID = ruleLineCounter
+		lineObject.line = scanner.Text()
+		if len(lineObject.line) == 0 {
+			continue
+		}
+		ruleQueue <- *lineObject
+		ruleLineCounter++
+		if ruleLineCounter%10000 == 0 {
+			ruleBar.Add(10000)
+		}
+	}
+	ruleBar.Add(int(ruleLineCounter))
+	close(ruleQueue)
+	go func() {
+		wg.Wait()
+		close(ruleOutput)
+	}()
+
+	// Step 1: Consume the channel into a slice
+	var sortedRules []ruleObj
+	for obj := range ruleOutput {
+		sortedRules = append(sortedRules, obj)
+	}
+
+	// Step 2: Sort the slice by ID
+	sort.Slice(sortedRules, func(i, j int) bool {
+		return sortedRules[i].ID < sortedRules[j].ID
+	})
+	ruleBar.Finish()
+	ruleBar.Close()
+	println()
+	return sortedRules
 }

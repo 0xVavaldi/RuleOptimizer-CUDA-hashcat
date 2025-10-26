@@ -1,8 +1,39 @@
 package main
 
+/*
+#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/include"
+#cgo LDFLAGS: -L. -lrules -L"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/lib/x64" -lcudart -lcuda
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+void allocateDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void pushDictionary(char *h_wordlist, uint8_t *h_wordlistLengths, char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void overwriteDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, char **d_overwrite, uint8_t **d_overwriteLengths, int wordlistCount, cudaStream_t stream);
+void resetDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void pullDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, char *h_wordlist, uint8_t *h_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void deallocateDictionary(char *d_wordlist, uint8_t *d_wordlistLengths, cudaStream_t stream);
+
+void allocateHashes(uint64_t **d_hashes, int hashCount, cudaStream_t stream);
+void pushHashes(uint64_t *h_hashes, uint64_t **d_hashes, int hashCount, cudaStream_t stream);
+void overwriteHashes(uint64_t **d_hashes, uint64_t **d_overwrite, int hashCount, cudaStream_t stream);
+void pullHashes(uint64_t **d_hashes, uint64_t *h_hashes, int hashCount, cudaStream_t stream);
+void deallocateHashes(uint64_t *d_hashes, cudaStream_t stream);
+
+void initializeHitCount(uint64_t **d_hitCount, cudaStream_t stream);
+void pullHitCount(uint64_t *d_hitCount, uint64_t* h_hitCount, cudaStream_t stream);
+void resetHitCount(uint64_t **d_hitCount, cudaStream_t stream);
+void deallocateHitCount(uint64_t *d_hitCount, cudaStream_t stream);
+
+void computeXXHashes(char* d_words, int* d_lengths, uint64_t seed, uint64_t* d_hashes, int numWords);
+void computeXXHashesWithHits(char *processedDict, uint8_t *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, cudaStream_t stream);
+uint64_t computeXXHashesWithCount(char *processedDict, uint8_t *processedLengths, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, uint64_t seed, cudaStream_t stream);
+void computeCountFast(char *d_processedDict, uint8_t *d_processedLengths, char *d_target, uint8_t *d_targetLengths, char *d_matching, uint8_t *d_matchingLengths, int wordlistCount, int targetCount, uint64_t *hitCount, cudaStream_t stream, bool storeHits);
+*/
 import "C"
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -14,75 +45,56 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
+// d_ and gpu prefix define variables that exist on the GPU
+// Count suffix defines the amount of elements in the array
+// Lengths suffix defines the lengths of each element respectively
 func generatePhase1(cli CLI) {
-	originalDictName := cli.Score.Wordlist
-	originalHashes := loadHashedWordlist(originalDictName)
-	originalDictCount := len(originalHashes)
-	originalDict := make([]string, 0, originalDictCount)
-
-	compareDictName := cli.Score.Target
-	compareDictHashes := loadHashedWordlist(compareDictName)
-	compareDictCount := len(compareDictHashes)
-
-	file, err := os.Open(originalDictName)
-	if err != nil {
-		log.Println("Error opening file:", err)
-		return
-	}
-	defer file.Close()
-
-	log.Println("Loading Input Wordlist")
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		input := scanner.Text()
-		if len(input) <= MaxLen {
-			originalDict = append(originalDict, input)
-		}
-	}
-	originalDictCount = len(originalDict)
-
-	log.Println("Loading Rules")
+	//wordlistHashes := loadHashedWordlist(cli.Score.Wordlist)
+	wordlist, wordlistLengths, wordlistCount := loadWordlist(cli.Score.Wordlist)
+	targetHashes := loadHashedWordlist(cli.Score.Target)
+	targetCount := len(targetHashes)
 	rules := loadRulesFast(cli.Score.RuleFile)
 
 	deviceCount := CUDAGetDeviceCount()
 	log.Printf("Detected %d GPU devices. Initializing", deviceCount)
 
-	// Start processing
-	// Start processing
-	// Start processing
-
-	// Compute Rule
-	originalDictGPUArray := make([]byte, (originalDictCount)*MaxLen)
-	originalDictGPUArrayLengths := make([]uint32, originalDictCount)
-	for i, word := range originalDict {
-		copy(originalDictGPUArray[i*MaxLen:], word)
-		originalDictGPUArrayLengths[i] = uint32(len(word))
+	// Convert to 2d byte array in chunks of size MaxLen
+	wordlistBytes := make([]byte, (wordlistCount)*MaxLen)
+	for i, word := range wordlist {
+		copy(wordlistBytes[i*MaxLen:], word)
 	}
+	wordlist = nil
 
 	processRuleFile(
 		cli,
 		rules,
 		deviceCount,
-		&originalDictGPUArray,
-		&originalDictGPUArrayLengths,
-		&originalHashes,
-		&compareDictHashes,
-		originalDictCount,
-		compareDictCount,
+		&wordlistBytes,
+		&wordlistLengths,
+		&targetHashes,
+		wordlistCount,
+		targetCount,
 	)
 }
 
 func processRuleFile(
-	cli CLI, rules []ruleObj, deviceCount int, originalDictGPUArray *[]byte, originalDictGPUArrayLengths *[]uint32, originalHashes *[]uint64, compareDictHashes *[]uint64, originalDictCount int, compareDictCount int) {
-	deviceCount = CUDAGetDeviceCount()
-	ruleChan := make(chan *ruleObj, 2)
+	cli CLI,
+	rules []ruleObj,
+	deviceCount int,
+	wordlistBytes *[]byte,
+	wordlistLengths *[]uint8,
+	targetHashes *[]uint64,
+	wordlistCount int,
+	targetCount int,
+) {
+	ruleChan := make(chan *ruleObj, 5)
 	var writerMutex sync.Mutex
 	var wg sync.WaitGroup
-	var wgg sync.WaitGroup
+	var wgResult sync.WaitGroup
 	wg.Add(deviceCount)
-	wgg.Add(1)
+	wgResult.Add(1)
 
-	processBar := progressbar.NewOptions(len(rules)*originalDictCount,
+	processBar := progressbar.NewOptions(len(rules)*wordlistCount,
 		progressbar.OptionSetPredictTime(true),
 		progressbar.OptionShowDescriptionAtLineEnd(),
 		progressbar.OptionSetRenderBlankState(true),
@@ -100,7 +112,7 @@ func processRuleFile(
 	resultChan := make(chan result) // Buffer size can be adjusted
 
 	go func() {
-		defer wgg.Done()
+		defer wgResult.Done()
 		outputFile, err := os.OpenFile(cli.Simulate.OutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			fmt.Println("Error opening or creating file:", err)
@@ -120,54 +132,237 @@ func processRuleFile(
 		go func() {
 			runtime.LockOSThread()
 			CUDASetDevice(i)
-			defer func() {
+			stream := CUDAInitializeStream()
+			gpuWordlist, gpuWordlistLengths := cudaInitializeDict(wordlistBytes, wordlistLengths, wordlistCount, stream)
+
+			processedHashes := make([]uint64, wordlistCount)
+			gpuProcessed, gpuProcessedLengths := cudaInitializeDict(wordlistBytes, wordlistLengths, wordlistCount, stream)
+			gpuProcessedHashes := cudaInitializeHashes(&processedHashes, wordlistCount, stream)
+
+			gpuFoundHashes := cudaInitializeHashes(&processedHashes, targetCount, stream)
+			gpuTargetHashes := cudaInitializeHashes(targetHashes, targetCount, stream)
+			gpuHitCount := cudaInitializeHitCount(stream)
+
+			// Clean up after we finish working
+			defer func(
+				gpuWordlist *C.char, gpuWordlistLengths *C.uint8_t,
+				gpuProcessed *C.char, gpuProcessedLengths *C.uint8_t,
+				gpuProcessedHashes *C.uint64_t,
+				gpuFoundHashes *C.uint64_t,
+				gpuTargetHashes *C.uint64_t,
+				gpuHitCount *C.uint64_t,
+				stream C.cudaStream_t,
+			) {
+				cudaDeinitializeDict(gpuWordlist, gpuWordlistLengths, stream)
+				cudaDeinitializeDict(gpuProcessed, gpuProcessedLengths, stream)
+				cudaDeinitializeHashes(gpuProcessedHashes, stream)
+				cudaDeinitializeHashes(gpuFoundHashes, stream)
+				cudaDeinitializeHashes(gpuTargetHashes, stream)
+				cudaDeinitializeHitCount(gpuHitCount, stream)
+				CUDADeinitializeStream(stream)
 				runtime.UnlockOSThread()
 				wg.Done()
-			}()
-			d_originalDict, d_originalDictLengths, d_originalHashes, d_compareHashes, stream := CUDAInitialize(originalDictGPUArray, originalDictGPUArrayLengths, originalHashes, originalDictCount, compareDictHashes, compareDictCount)
-			func() {
-				// Initialize processed variables for this worker
-				hashes := make([]uint64, originalDictCount)
-				d_hashes := CUDAInitializeHashHits(&hashes, originalDictCount, stream)
-				hashTable := make([]bool, originalDictCount*1)
-				d_hashTable := CUDAInitializeHashTable(&hashTable, originalDictCount*1, stream)
-				d_processedDict, d_processedDictLengths, d_hitCount := CUDAInitializeProcessed(originalDictCount, stream)
-				defer func(d_originalDict *C.char, d_originalDictLengths *C.int, d_originalHashes *C.uint64_t, d_compareHashes *C.uint64_t, d_processedDict *C.char, d_processedDictLengths *C.int, d_hitCount *C.uint64_t, d_hashes *C.uint64_t, d_hashTable *C.bool, stream C.cudaStream_t) {
-					CUDADeinitialize(d_originalDict, d_originalDictLengths, stream)
-					CUDADeinitializeHashes(d_originalHashes, d_compareHashes, stream)
-					CUDADeinitializeHashHits(d_hashes, stream)
-					CUDADeinitializeHashTable(d_hashTable, stream)
-					CUDADeinitializeProcessed(d_processedDict, d_processedDictLengths, d_hitCount, stream)
-					CUDADeinitializeStream(stream)
-				}(d_originalDict, d_originalDictLengths, d_originalHashes, d_compareHashes, d_processedDict, d_processedDictLengths, d_hitCount, d_hashes, d_hashTable, stream)
+			}(
+				gpuWordlist, gpuWordlistLengths,
+				gpuProcessed, gpuProcessedLengths,
+				gpuProcessedHashes,
+				gpuFoundHashes,
+				gpuTargetHashes,
+				gpuHitCount,
+				stream,
+			)
 
-				// Initialize processed variables for this worker
-				// Process each rule received from the channel and binary search the results against the original wordlist
-				// to extract new entries that don't already exist. originalHashes lives per gpu device
-				for rule := range ruleChan {
-					hits := CUDASingleRuleScore(
-						&rule.RuleLine,
-						d_originalDict, d_originalDictLengths,
-						d_processedDict, d_processedDictLengths,
-						d_originalHashes, originalDictCount,
-						d_compareHashes, compareDictCount,
-						d_hitCount, d_hashes,
-						d_hashTable,
-						stream,
-					)
-					if len(rule.RuleLine) <= 5 { // experimental 2025-08-22
-						hits *= uint64(10)
-						hits /= uint64(5 + len(rule.RuleLine))
-					}
-					//hits := CountUnique(hashedWords)
-					// Write results with existing mutex
-					writerMutex.Lock()
-					processBar.Add(originalDictCount)
-					resultChan <- result{hits: hits, rule: rule}
-					//appendScoreToFile(cli.OutputFile, hits, rule)
-					writerMutex.Unlock()
-				}
-			}()
+			// Initialize processed variables for this worker
+			// Process each rule received from the channel and binary search the results against the original wordlist
+			// to extract new entries that don't already exist. wordlistHashes lives per gpu device
+			for rule := range ruleChan {
+				hits := CUDASingleRuleScore(
+					&rule.RuleLine,
+					gpuWordlist, gpuWordlistLengths,
+					gpuProcessed, gpuProcessedLengths,
+					gpuProcessedHashes, wordlistCount,
+					gpuTargetHashes, targetCount,
+					gpuHitCount,
+					gpuFoundHashes,
+					stream,
+				)
+
+				writerMutex.Lock()
+				processBar.Add(wordlistCount)
+				resultChan <- result{hits: hits, rule: rule}
+				writerMutex.Unlock()
+			}
+		}()
+	}
+
+	// Send all rules to the workers
+	for i := range rules {
+		ruleChan <- &rules[i]
+	}
+	close(ruleChan)
+	wg.Wait()
+	close(resultChan)
+	wgResult.Wait()
+	processBar.Close()
+	processBar.Finish()
+	return
+}
+
+// ~10% improvement by using wordlist instead of hashes. Trading VRAM for speed.
+func generatePhase1Fast(cli CLI) {
+	wordlist, wordlistLengths, wordlistCount := loadWordlist(cli.Score.Wordlist)
+	target, targetLengths, targetCount := loadWordlist(cli.Score.Target)
+	target = removeAfromB(wordlist, target)
+
+	log.Println("Loading Rules")
+	log.Println("Estimated memory usage wordlist: ", ByteCountSI(wordlistCount*32+wordlistCount))
+	log.Println("Estimated memory usage target: ", ByteCountSI(targetCount*32+targetCount))
+	log.Println("Estimated memory usage buffer: ", ByteCountSI(wordlistCount*32+wordlistCount))
+	log.Println("Estimated memory hits: ", ByteCountSI(wordlistCount*32))
+	log.Println("Estimated Total Memory: ", ByteCountSI(wordlistCount*96+targetCount*32+wordlistCount*4+targetCount*4))
+	rules := loadRulesFast(cli.Score.RuleFile)
+	// Start processing
+	// Start processing
+	// Start processing
+	wordlistBytes := make([]byte, wordlistCount*MaxLen)
+	for i, word := range wordlist {
+		copy(wordlistBytes[i*MaxLen:], word)
+		wordlist[i] = ""
+	}
+	wordlist = nil
+
+	targetBytes := make([]byte, targetCount*MaxLen)
+	for i, word := range target {
+		copy(targetBytes[i*MaxLen:], word)
+		target[i] = ""
+	}
+	targetBytes = nil
+
+	processRuleFileFast(
+		cli,
+		rules,
+		&wordlistBytes,
+		&wordlistLengths,
+		&targetBytes,
+		&targetLengths,
+		wordlistCount,
+		targetCount,
+	)
+}
+
+func processRuleFileFast(
+	cli CLI,
+	rules []ruleObj,
+	wordlistBytes *[]byte,
+	wordlistLengths *[]uint8,
+	targetBytes *[]byte,
+	targetLengths *[]uint8,
+	wordlistCount int,
+	targetCount int,
+) {
+	deviceCount := CUDAGetDeviceCount()
+	log.Printf("Detected %d GPU devices.", deviceCount)
+
+	ruleChan := make(chan *ruleObj, 5)
+	var writerMutex sync.Mutex
+	var wg sync.WaitGroup
+	var wgg sync.WaitGroup
+	wg.Add(deviceCount)
+	wgg.Add(1)
+
+	totalMemoryEstimate := wordlistCount*MaxLen + wordlistCount*MaxLen + targetCount*MaxLen + targetCount*MaxLen
+	fmt.Printf("Expected memory usage is: %dGB", totalMemoryEstimate/1000000000)
+
+	processBar := progressbar.NewOptions(wordlistCount*len(rules),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionThrottle(1000*time.Millisecond),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetWidth(25),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowCount(),
+	)
+
+	type result struct {
+		hits uint64
+		rule *ruleObj
+	}
+	resultChan := make(chan result) // Buffer size can be adjusted
+
+	go func() {
+		defer wgg.Done()
+		outputFile, err := os.OpenFile(cli.Score.OutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Println("Error opening or creating output score file:", err)
+			return
+		}
+		defer outputFile.Close()
+
+		for res := range resultChan {
+			if _, err = outputFile.WriteString(strconv.FormatUint(res.hits, 10) + "\t" + FormatAllRules(res.rule.RuleLine) + "\n"); err != nil {
+				fmt.Println("Error writing to output score file:", err)
+				continue
+			}
+		}
+	}()
+
+	for i := 0; i < deviceCount; i++ {
+		go func() {
+			runtime.LockOSThread()
+			CUDASetDevice(i)
+			stream := CUDAInitializeStream()
+			gpuWordlist, gpuWordlistLengths := cudaInitializeDict(wordlistBytes, wordlistLengths, wordlistCount, stream)
+			gpuProcessed, gpuProcessedLengths := cudaInitializeDict(wordlistBytes, wordlistLengths, wordlistCount, stream)
+			gpuTarget, gpuTargetLengths := cudaInitializeDict(targetBytes, targetLengths, targetCount, stream)
+			gpuMatching, gpuMatchingLengths := cudaAllocateDict(wordlistCount, stream)
+			gpuHitCount := cudaInitializeHitCount(stream)
+			defer func(
+				gpuWordlist *C.char, gpuWordlistLengths *C.uint8_t,
+				gpuProcessed *C.char, gpuProcessedLengths *C.uint8_t,
+				gpuTarget *C.char, gpuTargetLengths *C.uint8_t,
+				gpuMatching *C.char, gpuMatchingLengths *C.uint8_t,
+				gpuHitCount *C.uint64_t,
+				stream C.cudaStream_t,
+			) {
+				cudaDeinitializeDict(gpuWordlist, gpuWordlistLengths, stream)
+				cudaDeinitializeDict(gpuProcessed, gpuProcessedLengths, stream)
+				cudaDeinitializeDict(gpuTarget, gpuTargetLengths, stream)
+				cudaDeinitializeDict(gpuMatching, gpuMatchingLengths, stream)
+				cudaDeinitializeHitCount(gpuHitCount, stream)
+				CUDADeinitializeStream(stream)
+				runtime.UnlockOSThread()
+				wg.Done()
+			}(
+				gpuWordlist, gpuWordlistLengths,
+				gpuProcessed, gpuProcessedLengths,
+				gpuTarget, gpuTargetLengths,
+				gpuMatching, gpuMatchingLengths,
+				gpuHitCount,
+				stream,
+			)
+			// Initialize processed variables for this worker
+			// Process each rule received from the channel and binary search the results against the original wordlist
+			// to extract new entries that don't already exist. wordlistHashes lives per gpu device.
+			storeHits := true
+			for rule := range ruleChan {
+				hits := CUDASingleRuleScoreFast(
+					&rule.RuleLine,
+					gpuWordlist, gpuWordlistLengths,
+					gpuProcessed, gpuProcessedLengths,
+					gpuTarget, gpuTargetLengths,
+					gpuMatching, gpuMatchingLengths,
+					wordlistCount, targetCount,
+					gpuHitCount,
+					stream,
+					storeHits,
+				)
+
+				writerMutex.Lock()
+				processBar.Add(wordlistCount)
+				resultChan <- result{hits: hits, rule: rule}
+				writerMutex.Unlock()
+			}
 		}()
 	}
 

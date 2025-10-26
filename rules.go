@@ -11,125 +11,123 @@ package main
 // No Param
 
 // l
-void applyLowerCase(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyLowerCase(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // u
-void applyUpperCase(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyUpperCase(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // c
-void applyCapitalize(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyCapitalize(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // C
-void applyInvertCapitalize(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyInvertCapitalize(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // t
-void applyToggleCase(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyToggleCase(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // q
-void applyDuplicateChars(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyDuplicateChars(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // r
-void applyReverse(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyReverse(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // k
-void applySwapFirstTwo(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applySwapFirstTwo(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // K
-void applySwapLastTwo(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applySwapLastTwo(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // d
-void applyDuplicate(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyDuplicate(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // f
-void applyReflect(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyReflect(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // {
-void applyRotateLeft(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyRotateLeft(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // }
-void applyRotateRight(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyRotateRight(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // [
-void applyDeleteFirst(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyDeleteFirst(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // ]
-void applyDeleteLast(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyDeleteLast(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // E
-void applyTitleCase(char *words, int *lengths, int numWords, cudaStream_t stream);
+void applyTitleCase(char *words, uint8_t *lengths, int numWords, cudaStream_t stream);
 // T
-void applyTogglePosition(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applyTogglePosition(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // p
-void applyRepeatWord(char *words, int *lengths, int count, int numWords, cudaStream_t stream);
+void applyRepeatWord(char *words, uint8_t *lengths, int count, int numWords, cudaStream_t stream);
 // D
-void applyDeletePosition(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applyDeletePosition(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // z
-void applyPrependFirstChar(char *words, int *lengths, int count, int numWords, cudaStream_t stream);
+void applyPrependFirstChar(char *words, uint8_t *lengths, int count, int numWords, cudaStream_t stream);
 // Z
-void applyAppendLastChar(char *words, int *lengths, int count, int numWords, cudaStream_t stream);
+void applyAppendLastChar(char *words, uint8_t *lengths, int count, int numWords, cudaStream_t stream);
 // '
-void applyTruncateAt(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applyTruncateAt(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // s
-void applySubstitution(char *words, int *lengths, char oldChar, char newChar, int numWords, cudaStream_t stream);
+void applySubstitution(char *words, uint8_t *lengths, char oldChar, char newChar, int numWords, cudaStream_t stream);
 // S
-void applySubstitutionFirst(char *words, int *lengths, char oldChar, char newChar, int numWords, cudaStream_t stream);
+void applySubstitutionFirst(char *words, uint8_t *lengths, char oldChar, char newChar, int numWords, cudaStream_t stream);
 // $
-void applyAppend(char *words, int *lengths, char appendChar, int numWords, cudaStream_t stream);
+void applyAppend(char *words, uint8_t *lengths, char appendChar, int numWords, cudaStream_t stream);
 // ^
-void applyPrepend(char *words, int *lengths, char prefixChar, int numWords, cudaStream_t stream);
+void applyPrepend(char *words, uint8_t *lengths, char prefixChar, int numWords, cudaStream_t stream);
 // y
-void applyPrependPrefixSubstr(char *words, int *lengths, int count, int numWords, cudaStream_t stream);
+void applyPrependPrefixSubstr(char *words, uint8_t *lengths, int count, int numWords, cudaStream_t stream);
 // Y
-void applyAppendSuffixSubstr(char *words, int *lengths, int count, int numWords, cudaStream_t stream);
+void applyAppendSuffixSubstr(char *words, uint8_t *lengths, int count, int numWords, cudaStream_t stream);
 // L
-void applyBitShiftLeft(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applyBitShiftLeft(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // R
-void applyBitShiftRight(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applyBitShiftRight(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // -
-void applyDecrementChar(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applyDecrementChar(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // +
-void applyIncrementChar(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applyIncrementChar(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // @
-void applyDeleteAllChar(char *words, int *lengths, char target, int numWords, cudaStream_t stream);
+void applyDeleteAllChar(char *words, uint8_t *lengths, char target, int numWords, cudaStream_t stream);
 // .
-void applySwapNext(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applySwapNext(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // ,
-void applySwapLast(char *words, int *lengths, int pos, int numWords, cudaStream_t stream);
+void applySwapLast(char *words, uint8_t *lengths, int pos, int numWords, cudaStream_t stream);
 // e
-void applyTitleSeparator(char *words, int *lengths, char separator, int numWords, cudaStream_t stream);
+void applyTitleSeparator(char *words, uint8_t *lengths, char separator, int numWords, cudaStream_t stream);
 // i
-void applyInsert(char *words, int *lengths, int pos, char insert_char, int numWords, cudaStream_t stream);
+void applyInsert(char *words, uint8_t *lengths, int pos, char insert_char, int numWords, cudaStream_t stream);
 // O
-void applyOmit(char *words, int *lengths, int pos, int count, int numWords, cudaStream_t stream);
+void applyOmit(char *words, uint8_t *lengths, int pos, int count, int numWords, cudaStream_t stream);
 // o
-void applyOverwrite(char *words, int *lengths, int pos, char replace_char, int numWords, cudaStream_t stream);
+void applyOverwrite(char *words, uint8_t *lengths, int pos, char replace_char, int numWords, cudaStream_t stream);
 // *
-void applySwapAny(char *words, int *lengths, int pos, int replace_pos, int numWords, cudaStream_t stream);
+void applySwapAny(char *words, uint8_t *lengths, int pos, int replace_pos, int numWords, cudaStream_t stream);
 // x
-void applyExtract(char *words, int *lengths, int pos, int count, int numWords, cudaStream_t stream);
+void applyExtract(char *words, uint8_t *lengths, int pos, int count, int numWords, cudaStream_t stream);
 // <
-void applyRejectLess(char *words, int *lengths, int count, int numWords, cudaStream_t stream);
+void applyRejectLess(char *words, uint8_t *lengths, int count, int numWords, cudaStream_t stream);
 // >
-void applyRejectGreater(char *words, int *lengths, int count, int numWords, cudaStream_t stream);
+void applyRejectGreater(char *words, uint8_t *lengths, int count, int numWords, cudaStream_t stream);
 // _
-void applyRejectEqual(char *words, int *lengths, int count, int numWords, cudaStream_t stream);
+void applyRejectEqual(char *words, uint8_t *lengths, int count, int numWords, cudaStream_t stream);
 // !
-void applyRejectContain(char *words, int *lengths, char contain_char, int numWords, cudaStream_t stream);
+void applyRejectContain(char *words, uint8_t *lengths, char contain_char, int numWords, cudaStream_t stream);
 // /
-void applyRejectNotContain(char *words, int *lengths, char contain_char, int numWords, cudaStream_t stream);
+void applyRejectNotContain(char *words, uint8_t *lengths, char contain_char, int numWords, cudaStream_t stream);
 // 3
-void applyToggleWithNSeparator(char *words, int *lengths, char separator_char, int separator_num, int numWords, cudaStream_t stream);
+void applyToggleWithNSeparator(char *words, uint8_t *lengths, char separator_char, int separator_num, int numWords, cudaStream_t stream);
 
 void computeXXHashes(char* d_words, int* d_lengths, uint64_t seed, uint64_t* d_hashes, int numWords);
-void allocateOriginalDictMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char *h_originalDict, int *h_originalDictLengths, int numWords, cudaStream_t stream);
-void allocateProcessedDictMemoryOnGPU(char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hitCount, int numWords, cudaStream_t stream);
-void allocateHashesMemoryOnGPU(uint64_t **d_originalHashes, int originalCount, uint64_t **d_compareHashes, int compareCount, uint64_t *h_originalHashes, uint64_t *h_compareHashes, cudaStream_t stream);
-void allocateHashHitsMemoryOnGPU(uint64_t **d_hashes, uint64_t *h_hashes, int64_t numWords, cudaStream_t stream);
-void allocateHashTableMemoryOnGPU(bool **d_hashTable, bool *h_hashTable, int64_t hashTableSize, cudaStream_t stream);
+void computeXXHashesWithHits(char *processedDict, uint8_t *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, cudaStream_t stream);
+uint64_t computeXXHashesWithCount(char *processedDict, uint8_t *processedLengths, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, uint64_t seed, cudaStream_t stream);
+void computeCountFast(char *d_processed, uint8_t *d_processedLengths, char *d_target, uint8_t *d_targetLengths, char *d_matching, uint8_t *d_matchingLengths, int wordlistCount, int targetCount, uint64_t* d_hitCount, cudaStream_t stream, bool storeHits);
 
-void computeXXHashesWithHits(char *processedDict, int *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, bool *hashTable, cudaStream_t stream);
-void computeXXHashesWithCount(char *processedDict, int *processedLengths, uint64_t seed, const uint64_t *originalHashes, int originalCount, uint64_t *compareHashes, int compareCount, uint64_t *hitCount, uint64_t *matchingHashes, bool *hashTable, cudaStream_t stream);
+void allocateDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void pushDictionary(char *h_wordlist, uint8_t *h_wordlistLengths, char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void overwriteDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, char **d_overwrite, uint8_t **d_overwriteLengths, int wordlistCount, cudaStream_t stream);
+void resetDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void pullDictionary(char **d_wordlist, uint8_t **d_wordlistLengths, char *h_wordlist, uint8_t *h_wordlistLengths, int wordlistCount, cudaStream_t stream);
+void deallocateDictionary(char *d_wordlist, uint8_t *d_wordlistLengths, cudaStream_t stream);
 
-void ResetProcessedDictMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hitCount, int numWords, cudaStream_t stream);
-void ResetProcessedDictHashedMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hitCount, int numWords, uint64_t **d_hashes, bool **d_hashTable, cudaStream_t stream);
-void ResetProcessedHitsMemoryOnGPU(char **d_originalDict, int **d_originalDictLengths, char **d_processedDict, int **d_processedDictLengths, uint64_t **d_hashes, int numWords, cudaStream_t stream);
-void copyMemoryBackToHost(uint64_t *h_hits, uint64_t *d_hits, cudaStream_t stream);
-void copyWordMemoryBackToHost(char* h_processedDict, int* h_processedDictLengths, char **d_processedDict, int **d_processedDictLengths, int originalDictCount, cudaStream_t stream);
-void copyHashMemoryBackToHost(uint64_t *h_hashes, uint64_t **d_hashes, int numWords, cudaStream_t stream);
+void allocateHashes(uint64_t **d_hashes, int hashCount, cudaStream_t stream);
+void pushHashes(uint64_t *h_hashes, uint64_t **d_hashes, int hashCount, cudaStream_t stream);
+void overwriteHashes(uint64_t **d_hashes, uint64_t **d_overwrite, int hashCount, cudaStream_t stream);
+void pullHashes(uint64_t **d_hashes, uint64_t *h_hashes, int hashCount, cudaStream_t stream);
+void deallocateHashes(uint64_t *d_hashes, cudaStream_t stream);
 
-int getDeviceCount();
-void streamSynchronize(cudaStream_t stream);
-void setDevice(int deviceID);
-void freeOriginalMemoryOnGPU(char *d_originalDict, int *d_originalDictLengths, cudaStream_t stream);
-void freeOriginalHashesMemoryOnGPU(uint64_t *d_originalHashes, uint64_t *d_compareHashes, cudaStream_t stream);
-void freeProcessedMemoryOnGPU(char *d_processedDict, int *d_processedDictLengths, uint64_t *d_hitCount, cudaStream_t stream);
-void freeHashHitsMemoryOnGPU(uint64_t *d_hashes, cudaStream_t stream);
-void freeHashTableMemoryOnGPU(bool *d_hashTable, cudaStream_t stream);
+void initializeHitCount(uint64_t **d_hitCount, cudaStream_t stream);
+void pullHitCount(uint64_t *d_hitCount, uint64_t* h_hitCount, cudaStream_t stream);
+void resetHitCount(uint64_t **d_hitCount, cudaStream_t stream);
+void deallocateHitCount(uint64_t *d_hitCount, cudaStream_t stream);
+
 */
 import "C"
 import (
@@ -137,8 +135,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/cespare/xxhash/v2"
-	"github.com/schollz/progressbar/v3"
 	"io"
 	"log"
 	"os"
@@ -149,6 +145,9 @@ import (
 	"time"
 	"unicode"
 	"unsafe"
+
+	"github.com/cespare/xxhash/v2"
+	"github.com/schollz/progressbar/v3"
 )
 
 // Rule contains the core data structure
@@ -395,7 +394,8 @@ func ParseTSVRules(lineCounter uint64, line string) ([]Rule, error) {
 }
 
 func CUDASetDevice(deviceID int) {
-	C.setDevice(C.int(deviceID))
+	C.cudaSetDevice(C.int(deviceID))
+	//C.cudaFree(0)
 }
 
 // ParseSingleRule Parses a single rule such as : or s31 or $b
@@ -1139,578 +1139,608 @@ func FormatAllRules(allRules []Rule, optionalDelimiter ...string) string {
 	return returnString
 }
 
-func CUDAInitialize(
-	originalDictGPUArray *[]byte,
-	originalDictGPUArrayLengths *[]uint32,
-	originalHashes *[]uint64,
-	originalDictCount int,
-	compareHashes *[]uint64,
-	compareDictCount int,
-) (*C.char, *C.int, *C.uint64_t, *C.uint64_t, C.cudaStream_t) {
-	h_originalDictPtr := (*C.char)(unsafe.Pointer(&(*originalDictGPUArray)[0]))
-	h_originalDictLengthPtr := (*C.int)(unsafe.Pointer(&(*originalDictGPUArrayLengths)[0]))
-	h_originalHashPtr := (*C.uint64_t)(unsafe.Pointer(&(*originalHashes)[0]))
-	h_compareHashPtr := (*C.uint64_t)(unsafe.Pointer(&(*compareHashes)[0]))
-
-	// target/device/destionation pointers for the data to be written to on the GPU.
-	var d_originalDict *C.char
-	var d_originalDictLengths *C.int
-	var d_compareHashes, d_originalHashes *C.uint64_t
-
+func CUDAInitializeStream() C.cudaStream_t {
 	var stream C.cudaStream_t
 	C.cudaStreamCreate(&stream)
-	C.allocateOriginalDictMemoryOnGPU(
-		&d_originalDict, &d_originalDictLengths,
-		h_originalDictPtr, h_originalDictLengthPtr,
-		C.int(originalDictCount),
-		stream,
-	)
-
-	C.allocateHashesMemoryOnGPU(
-		&d_originalHashes, C.int(originalDictCount),
-		&d_compareHashes, C.int(compareDictCount),
-		h_originalHashPtr, h_compareHashPtr,
-		stream,
-	)
-	return d_originalDict, d_originalDictLengths, d_originalHashes, d_compareHashes, stream
-}
-
-func CUDAInitializeProcessed(originalDictCount int, stream C.cudaStream_t) (*C.char, *C.int, *C.uint64_t) {
-	var d_processedDict *C.char
-	var d_processedDictLengths *C.int
-	var d_hitCount *C.uint64_t
-
-	d_hitCountPtr := (**C.uint64_t)(unsafe.Pointer(&d_hitCount))
-	C.allocateProcessedDictMemoryOnGPU(&d_processedDict, &d_processedDictLengths, d_hitCountPtr, C.int(originalDictCount), stream)
-	return d_processedDict, d_processedDictLengths, d_hitCount
-}
-
-func CUDAInitializeHashHits(hashes *[]uint64, originalDictCount int, stream C.cudaStream_t) *C.uint64_t {
-	h_hashesPtr := (*C.uint64_t)(unsafe.Pointer(&(*hashes)[0]))
-	var d_hashes *C.uint64_t
-
-	C.allocateHashHitsMemoryOnGPU(&d_hashes, h_hashesPtr, C.int64_t(originalDictCount), stream)
-	return d_hashes
-}
-
-func CUDAInitializeHashTable(hashTable *[]bool, hashTableSize int, stream C.cudaStream_t) *C.bool {
-	h_hashTablePtr := (*C.bool)(unsafe.Pointer(&(*hashTable)[0]))
-	var d_hashTable *C.bool
-
-	C.allocateHashTableMemoryOnGPU(&d_hashTable, h_hashTablePtr, C.int64_t(hashTableSize), stream)
-	return d_hashTable
-}
-
-func CUDADeinitializeProcessed(d_processedDict *C.char, d_processedDictLengths *C.int, d_hitCount *C.uint64_t, stream C.cudaStream_t) {
-	C.freeProcessedMemoryOnGPU(d_processedDict, d_processedDictLengths, d_hitCount, stream)
-}
-
-func CUDADeinitializeHashHits(d_hashes *C.uint64_t, stream C.cudaStream_t) {
-	C.freeHashHitsMemoryOnGPU(d_hashes, stream)
-}
-
-func CUDADeinitializeHashTable(d_hashTable *C.bool, stream C.cudaStream_t) {
-	C.freeHashTableMemoryOnGPU(d_hashTable, stream)
-}
-
-func CUDAResetState(
-	d_originalDict *C.char, d_originalDictLengths *C.int,
-	d_processedDict *C.char, d_processedDictLengths *C.int,
-	d_hitCount *C.uint64_t,
-	originalDictCount int,
-	stream C.cudaStream_t,
-) {
-	d_hitCountPtr := (**C.uint64_t)(unsafe.Pointer(&d_hitCount))
-	C.ResetProcessedDictMemoryOnGPU(
-		&d_originalDict, &d_originalDictLengths,
-		&d_processedDict, &d_processedDictLengths,
-		d_hitCountPtr, C.int(originalDictCount),
-		stream,
-	)
-}
-
-func CUDAResetStateHashed(
-	d_originalDict *C.char, d_originalDictLengths *C.int,
-	d_processedDict *C.char, d_processedDictLengths *C.int,
-	d_hitCount *C.uint64_t, originalDictCount int,
-	d_hashes *C.uint64_t, d_hashTable *C.bool,
-	stream C.cudaStream_t,
-) {
-	d_hitCountPtr := (**C.uint64_t)(unsafe.Pointer(&d_hitCount))
-	C.ResetProcessedDictHashedMemoryOnGPU(
-		&d_originalDict, &d_originalDictLengths,
-		&d_processedDict, &d_processedDictLengths,
-		d_hitCountPtr, C.int(originalDictCount),
-		&d_hashes, &d_hashTable,
-		stream,
-	)
-}
-
-func CUDAGetDeviceCount() int {
-	return int(C.getDeviceCount())
-}
-
-func CUDADeinitialize(d_originalDict *C.char, d_originalDictLengths *C.int, stream C.cudaStream_t) {
-	C.freeOriginalMemoryOnGPU(d_originalDict, d_originalDictLengths, stream)
-}
-
-func CUDADeinitializeHashes(d_originalHashes *C.uint64_t, d_compareHashes *C.uint64_t, stream C.cudaStream_t) {
-	C.freeOriginalHashesMemoryOnGPU(d_originalHashes, d_compareHashes, stream)
+	return stream
 }
 
 func CUDADeinitializeStream(stream C.cudaStream_t) {
 	C.cudaStreamDestroy(stream)
 }
 
+func cudaAllocateDict(
+	wordlistCount int,
+	stream C.cudaStream_t,
+) (*C.char, *C.uint8_t) {
+	var gpuWordlist *C.char
+	var gpuWordlistLengths *C.uint8_t
+	// Allocate memory on GPU
+	C.allocateDictionary(&gpuWordlist, &gpuWordlistLengths, C.int(wordlistCount), stream)
+	// return GPU pointers
+	return gpuWordlist, gpuWordlistLengths
+}
+
+func cudaInitializeDict(
+	wordlist *[]byte,
+	wordlistLengths *[]uint8,
+	wordlistCount int,
+	stream C.cudaStream_t,
+) (*C.char, *C.uint8_t) {
+	var gpuWordlist *C.char
+	var gpuWordlistLengths *C.uint8_t
+
+	// Host memory to copy to Device (GPU)
+	hostWordlist := (*C.char)(unsafe.Pointer(&(*wordlist)[0]))
+	hostWordlistLength := (*C.uint8_t)(unsafe.Pointer(&(*wordlistLengths)[0]))
+
+	// Allocate memory on GPU
+	C.allocateDictionary(&gpuWordlist, &gpuWordlistLengths, C.int(wordlistCount), stream)
+	// Copy Host Memory => GPU Memory
+	C.pushDictionary(
+		hostWordlist, hostWordlistLength,
+		&gpuWordlist, &gpuWordlistLengths,
+		C.int(wordlistCount),
+		stream,
+	)
+	// return GPU pointers
+	return gpuWordlist, gpuWordlistLengths
+}
+
+func cudaDeinitializeDict(
+	gpuWordlist *C.char,
+	gpuWordlistLengths *C.uint8_t,
+	stream C.cudaStream_t,
+) {
+	C.deallocateDictionary(gpuWordlist, gpuWordlistLengths, stream)
+}
+
+func cudaAllocateHashes(wordlistCount int, stream C.cudaStream_t) *C.uint64_t {
+	var d_hashes *C.uint64_t
+	C.allocateHashes(&d_hashes, C.int(wordlistCount), stream)
+	return d_hashes
+}
+
+func cudaInitializeHashes(
+	hashes *[]uint64,
+	hashCount int,
+	stream C.cudaStream_t,
+) *C.uint64_t {
+	var gpuHashes *C.uint64_t
+	// Host memory to copy to Device (GPU)
+	hostHashes := (*C.uint64_t)(unsafe.Pointer(&(*hashes)[0]))
+	// Allocate memory on GPU
+	C.allocateHashes(&gpuHashes, C.int(hashCount), stream)
+	// Copy Host Memory => GPU Memory
+	C.pushHashes(hostHashes, &gpuHashes, C.int(hashCount), stream)
+	// return GPU pointers
+	return gpuHashes
+}
+
+func cudaDeinitializeHashes(
+	gpuHashes *C.uint64_t,
+	stream C.cudaStream_t,
+) {
+	C.deallocateHashes(gpuHashes, stream)
+}
+
+func cudaInitializeHitCount(stream C.cudaStream_t) *C.uint64_t {
+	var gpuHitCount *C.uint64_t
+	C.initializeHitCount(&gpuHitCount, stream)
+	return gpuHitCount
+}
+
+func cudaDeinitializeHitCount(gpuHitCount *C.uint64_t, stream C.cudaStream_t) {
+	C.deallocateHitCount(gpuHitCount, stream)
+}
+
+func cudaResetStateFast(
+	d_wordlist *C.char, d_wordlistLengths *C.uint8_t,
+	d_processed *C.char, d_processedLengths *C.uint8_t,
+	d_matching *C.char, d_matchingLengths *C.uint8_t,
+	d_hitCount *C.uint64_t, wordlistCount int,
+	stream C.cudaStream_t,
+) {
+	d_hitCountPtr := (**C.uint64_t)(unsafe.Pointer(&d_hitCount))
+	C.resetHitCount(d_hitCountPtr, stream)
+	C.overwriteDictionary(
+		&d_wordlist, &d_wordlistLengths,
+		&d_processed, &d_processedLengths,
+		C.int(wordlistCount), stream,
+	)
+	C.resetDictionary(&d_matching, &d_matchingLengths, C.int(wordlistCount), stream)
+}
+
+func CUDAGetDeviceCount() int {
+	deviceCount := C.int(0)
+	C.cudaGetDeviceCount(&deviceCount)
+	return int(deviceCount)
+}
+
+//func CUDADeinitialize(d_originalDict *C.char, d_originalDictLengths *C.int, stream C.cudaStream_t) {
+//	C.freeOriginalMemoryOnGPU(d_originalDict, d_originalDictLengths, stream)
+//}
+//
+//func CUDADeinitializeFast(d_originalDict *C.char, d_originalDictLengths *C.uint8_t, stream C.cudaStream_t) {
+//	C.freeOriginalMemoryOnGPUFast(d_originalDict, d_originalDictLengths, stream)
+//}
+//
+//func CUDADeinitializeHashes(d_originalHashes *C.uint64_t, d_compareHashes *C.uint64_t, stream C.cudaStream_t) {
+//	C.deallocateHashes(d_originalHashes, d_compareHashes, stream)
+//}
+
 func CUDASingleRuleScore(ruleLine *[]Rule,
-	d_originalDict *C.char, d_originalDictLengths *C.int,
-	d_processedDict *C.char, d_processedDictLengths *C.int,
-	d_originalHashes *C.uint64_t, originalDictCount int,
-	d_compareHashes *C.uint64_t, compareHashCount int,
-	d_hitCount *C.uint64_t, d_hashes *C.uint64_t,
-	d_hashTable *C.bool, stream C.cudaStream_t,
+	gpuWordlist *C.char, gpuWordlistLengths *C.uint8_t,
+	gpuProcessed *C.char, gpuProcessedLengths *C.uint8_t,
+	gpuProcessedHashes *C.uint64_t, wordlistCount int,
+	gpuTargetHashes *C.uint64_t, targetCount int,
+	gpuHitCount *C.uint64_t, gpuFoundHashes *C.uint64_t,
+	stream C.cudaStream_t,
 ) uint64 {
-	CUDAResetStateHashed(d_originalDict, d_originalDictLengths, d_processedDict, d_processedDictLengths, d_hitCount, originalDictCount, d_hashes, d_hashTable, stream)
+	// Reset the processed Wordlist
+	C.overwriteDictionary(&gpuWordlist, &gpuWordlistLengths, &gpuProcessed, &gpuProcessedLengths, C.int(wordlistCount), stream)
+	C.resetHitCount(&gpuHitCount, stream)
+
 	for _, rule := range *ruleLine {
 		if rule.Function == "l" {
-			C.applyLowerCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyLowerCase(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "u" {
-			C.applyUpperCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyUpperCase(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "c" {
-			C.applyCapitalize(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyCapitalize(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "C" {
-			C.applyInvertCapitalize(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyInvertCapitalize(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "t" {
-			C.applyToggleCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyToggleCase(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "q" {
-			C.applyDuplicateChars(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyDuplicateChars(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "r" {
-			C.applyReverse(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyReverse(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "k" {
-			C.applySwapFirstTwo(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applySwapFirstTwo(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "K" {
-			C.applySwapLastTwo(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applySwapLastTwo(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "d" {
-			C.applyDuplicate(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyDuplicate(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "f" {
-			C.applyReflect(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyReflect(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "{" {
-			C.applyRotateLeft(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyRotateLeft(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "}" {
-			C.applyRotateRight(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyRotateRight(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "[" {
-			C.applyDeleteFirst(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyDeleteFirst(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "]" {
-			C.applyDeleteLast(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyDeleteLast(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "E" {
-			C.applyTitleCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
+			C.applyTitleCase(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "T" {
-			C.applyTogglePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyTogglePosition(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "p" {
-			C.applyRepeatWord(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyRepeatWord(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "D" {
-			C.applyDeletePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyDeletePosition(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "z" {
-			C.applyPrependFirstChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyPrependFirstChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "Z" {
-			C.applyAppendLastChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyAppendLastChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "'" {
-			C.applyTruncateAt(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyTruncateAt(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "s" {
-			C.applySubstitution(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
+			C.applySubstitution(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "S" {
-			C.applySubstitutionFirst(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
+			C.applySubstitutionFirst(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "$" {
-			C.applyAppend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			C.applyAppend(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "^" {
-			C.applyPrepend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			C.applyPrepend(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "y" {
-			C.applyAppendSuffixSubstr(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyAppendSuffixSubstr(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "Y" {
-			C.applyPrependPrefixSubstr(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyPrependPrefixSubstr(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "L" {
-			C.applyBitShiftLeft(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyBitShiftLeft(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "R" {
-			C.applyBitShiftRight(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyBitShiftRight(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "-" {
-			C.applyDecrementChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyDecrementChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "+" {
-			C.applyIncrementChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyIncrementChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "@" {
-			C.applyDeleteAllChar(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			C.applyDeleteAllChar(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "." {
-			C.applySwapNext(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applySwapNext(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "," {
-			C.applySwapLast(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applySwapLast(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "e" {
-			C.applyTitleSeparator(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			C.applyTitleSeparator(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "i" {
-			C.applyInsert(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
+			C.applyInsert(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "O" {
-			C.applyOmit(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
+			C.applyOmit(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "o" {
-			C.applyOverwrite(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
+			C.applyOverwrite(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "*" {
-			C.applySwapAny(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
+			C.applySwapAny(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "x" {
-			C.applyExtract(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
+			C.applyExtract(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "<" {
-			C.applyRejectLess(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyRejectLess(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == ">" {
-			C.applyRejectGreater(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyRejectGreater(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "_" {
-			C.applyRejectEqual(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
+			C.applyRejectEqual(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "!" {
-			C.applyRejectContain(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			C.applyRejectContain(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "/" {
-			C.applyRejectNotContain(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
+			C.applyRejectNotContain(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
 			continue
 		}
 		if rule.Function == "3" {
-			C.applyToggleWithNSeparator(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
+			C.applyToggleWithNSeparator(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(rule.NumericParameter2), C.int(wordlistCount), stream)
 			continue
 		}
 	}
 
 	// Synchronize and convert to usable so we can cleanly get rid of memory.
-	C.computeXXHashesWithCount(
-		d_processedDict, d_processedDictLengths, 0,
-		d_originalHashes, C.int(originalDictCount),
-		d_compareHashes, C.int(compareHashCount),
-		d_hitCount,
-		d_hashes,
-		d_hashTable,
+	hitCount := C.computeXXHashesWithCount(
+		gpuProcessed, gpuProcessedLengths,
+		gpuProcessedHashes, C.int(wordlistCount),
+		gpuTargetHashes, C.int(targetCount),
+		gpuHitCount,
+		gpuFoundHashes,
+		0,
 		stream,
 	)
+	return uint64(hitCount)
+}
+
+func CUDASingleRuleScoreFast(ruleLine *[]Rule,
+	d_wordlist *C.char, d_wordlistLengths *C.uint8_t,
+	d_processedDict *C.char, d_processedDictLengths *C.uint8_t,
+	d_target *C.char, d_targetLengths *C.uint8_t,
+	d_matching *C.char, d_matchingLengths *C.uint8_t,
+	wordlistCount int, targetCount int,
+	d_hitCount *C.uint64_t,
+	stream C.cudaStream_t,
+	storeHits bool,
+) uint64 {
+	// Reset the state 3.5ms
+	C.overwriteDictionary(&d_wordlist, &d_wordlistLengths, &d_processedDict, &d_processedDictLengths, C.int(wordlistCount), stream)
+	C.resetDictionary(&d_matching, &d_matchingLengths, C.int(wordlistCount), stream)
+	C.resetHitCount(&d_hitCount, stream)
+	wordlistCountC := C.int(wordlistCount)
+
+	for _, rule := range *ruleLine {
+		if rule.Function == "l" {
+			C.applyLowerCase(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "u" {
+			C.applyUpperCase(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "c" {
+			C.applyCapitalize(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "C" {
+			C.applyInvertCapitalize(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "t" {
+			C.applyToggleCase(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "q" {
+			C.applyDuplicateChars(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "r" {
+			C.applyReverse(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "k" {
+			C.applySwapFirstTwo(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "K" {
+			C.applySwapLastTwo(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "d" {
+			C.applyDuplicate(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "f" {
+			C.applyReflect(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "{" {
+			C.applyRotateLeft(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "}" {
+			C.applyRotateRight(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "[" {
+			C.applyDeleteFirst(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "]" {
+			C.applyDeleteLast(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "E" {
+			C.applyTitleCase(d_processedDict, d_processedDictLengths, wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "T" {
+			C.applyTogglePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "p" {
+			C.applyRepeatWord(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "D" {
+			C.applyDeletePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "z" {
+			C.applyPrependFirstChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "Z" {
+			C.applyAppendLastChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "'" {
+			C.applyTruncateAt(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "s" {
+			C.applySubstitution(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "S" {
+			C.applySubstitutionFirst(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "$" {
+			C.applyAppend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "^" {
+			C.applyPrepend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "y" {
+			C.applyAppendSuffixSubstr(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "Y" {
+			C.applyPrependPrefixSubstr(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "L" {
+			C.applyBitShiftLeft(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "R" {
+			C.applyBitShiftRight(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "-" {
+			C.applyDecrementChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "+" {
+			C.applyIncrementChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "@" {
+			C.applyDeleteAllChar(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "." {
+			C.applySwapNext(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "," {
+			C.applySwapLast(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "e" {
+			C.applyTitleSeparator(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "i" {
+			C.applyInsert(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "O" {
+			C.applyOmit(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "o" {
+			C.applyOverwrite(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "*" {
+			C.applySwapAny(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "x" {
+			C.applyExtract(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "<" {
+			C.applyRejectLess(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == ">" {
+			C.applyRejectGreater(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "_" {
+			C.applyRejectEqual(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "!" {
+			C.applyRejectContain(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "/" {
+			C.applyRejectNotContain(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
+			continue
+		}
+		if rule.Function == "3" {
+			C.applyToggleWithNSeparator(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(rule.NumericParameter2), wordlistCountC, stream)
+			continue
+		}
+	}
+
+	// Count matches and save count - 3.8ms
+	C.computeCountFast(
+		d_processedDict,
+		d_processedDictLengths,
+		d_target,
+		d_targetLengths,
+		d_matching,
+		d_matchingLengths,
+		C.int(wordlistCount),
+		C.int(targetCount),
+		d_hitCount,
+		stream,
+		C.bool(storeHits),
+	)
+
 	var hits uint64
-	C.streamSynchronize(stream)
-	C.copyMemoryBackToHost((*C.uint64_t)(unsafe.Pointer(&hits)), d_hitCount, stream)
+	C.pullHitCount(d_hitCount, (*C.uint64_t)(unsafe.Pointer(&hits)), stream)
 	return hits
 }
 
 func CUDAGetHashes(hits uint64, d_hashes *C.uint64_t, stream C.cudaStream_t) []uint64 {
 	h_hashes := (*C.uint64_t)(C.calloc(C.size_t(hits), C.sizeof_uint64_t))
-	C.copyHashMemoryBackToHost(h_hashes, &d_hashes, C.int(hits), stream)
+	C.pullHashes(&d_hashes, h_hashes, C.int(hits), stream)
 	hashes := convertProcessedHashes(h_hashes, C.int(hits))
 	defer C.free(unsafe.Pointer(h_hashes))
 	return hashes
 }
 
-func CUDASingleRuleHashed(ruleLine *[]Rule,
-	d_originalDict *C.char, d_originalDictLengths *C.int,
-	d_processedDict *C.char, d_processedDictLengths *C.int,
-	d_originalHashes *C.uint64_t, originalDictCount int,
-	d_compareHashes *C.uint64_t, compareHashCount int,
-	d_hitCount *C.uint64_t, d_hashes *C.uint64_t,
-	d_hashTable *C.bool, stream C.cudaStream_t,
-) []uint64 {
-	CUDAResetStateHashed(d_originalDict, d_originalDictLengths, d_processedDict, d_processedDictLengths, d_hitCount, originalDictCount, d_hashes, d_hashTable, stream)
-	for _, rule := range *ruleLine {
-		if rule.Function == "l" {
-			C.applyLowerCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "u" {
-			C.applyUpperCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "c" {
-			C.applyCapitalize(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "C" {
-			C.applyInvertCapitalize(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "t" {
-			C.applyToggleCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "q" {
-			C.applyDuplicateChars(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "r" {
-			C.applyReverse(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "k" {
-			C.applySwapFirstTwo(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "K" {
-			C.applySwapLastTwo(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "d" {
-			C.applyDuplicate(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "f" {
-			C.applyReflect(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "{" {
-			C.applyRotateLeft(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "}" {
-			C.applyRotateRight(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "[" {
-			C.applyDeleteFirst(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "]" {
-			C.applyDeleteLast(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "E" {
-			C.applyTitleCase(d_processedDict, d_processedDictLengths, C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "T" {
-			C.applyTogglePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "p" {
-			C.applyRepeatWord(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "D" {
-			C.applyDeletePosition(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "z" {
-			C.applyPrependFirstChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "Z" {
-			C.applyAppendLastChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "'" {
-			C.applyTruncateAt(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "s" {
-			C.applySubstitution(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "S" {
-			C.applySubstitutionFirst(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "$" {
-			C.applyAppend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "^" {
-			C.applyPrepend(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "y" {
-			C.applyAppendSuffixSubstr(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "Y" {
-			C.applyPrependPrefixSubstr(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "L" {
-			C.applyBitShiftLeft(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "R" {
-			C.applyBitShiftRight(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "-" {
-			C.applyDecrementChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "+" {
-			C.applyIncrementChar(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "@" {
-			C.applyDeleteAllChar(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "." {
-			C.applySwapNext(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "," {
-			C.applySwapLast(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "e" {
-			C.applyTitleSeparator(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "i" {
-			C.applyInsert(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "O" {
-			C.applyOmit(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "o" {
-			C.applyOverwrite(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "*" {
-			C.applySwapAny(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "x" {
-			C.applyExtract(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "<" {
-			C.applyRejectLess(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == ">" {
-			C.applyRejectGreater(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "_" {
-			C.applyRejectEqual(d_processedDict, d_processedDictLengths, C.int(rule.NumericParameter1), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "!" {
-			C.applyRejectContain(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "/" {
-			C.applyRejectNotContain(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(originalDictCount), stream)
-			continue
-		}
-		if rule.Function == "3" {
-			C.applyToggleWithNSeparator(d_processedDict, d_processedDictLengths, C.char(rule.Parameter1[0]), C.int(rule.NumericParameter2), C.int(originalDictCount), stream)
-			continue
-		}
-	}
-
-	C.computeXXHashesWithHits(
-		d_processedDict, d_processedDictLengths, 0,
-		d_originalHashes, C.int(originalDictCount),
-		d_compareHashes, C.int(compareHashCount),
-		d_hitCount,
-		d_hashes,
-		d_hashTable,
-		stream,
-	)
-
-	var hits uint64
-	C.streamSynchronize(stream)
-	C.copyMemoryBackToHost((*C.uint64_t)(unsafe.Pointer(&hits)), d_hitCount, stream)
-	h_hashes := (*C.uint64_t)(C.calloc(C.size_t(hits), C.sizeof_uint64_t))
-	C.copyHashMemoryBackToHost(h_hashes, &d_hashes, C.int(hits), stream)
-	hashes := convertProcessedHashes(h_hashes, C.int(hits))
-	defer C.free(unsafe.Pointer(h_hashes))
-	return hashes
-}
+// Utility
+// Utility
+// Utility
+// Utility
+// Utility
+// Utility
+// Utility
+// Utility
+// Utility
 
 func timer(name string) func() {
 	start := time.Now()
 	return func() {
 		fmt.Printf("%s took %v\n", name, time.Since(start))
 	}
+}
+
+func parseUint64(s string) uint64 {
+	var result uint64
+	fmt.Sscanf(s, "%d", &result)
+	return result
 }
 
 func lineCounter(inputFile string) (int, error) {
@@ -1811,12 +1841,6 @@ func loadRulesFast(inputFile string) []ruleObj {
 	return sortedRules
 }
 
-func parseUint64(s string) uint64 {
-	var result uint64
-	fmt.Sscanf(s, "%d", &result)
-	return result
-}
-
 func loadRuleScores(inputFile string) []ruleObj {
 	defer timer("loadRuleScores")()
 	ruleLines, _ := lineCounter(inputFile)
@@ -1894,171 +1918,4 @@ func loadRuleScores(inputFile string) []ruleObj {
 	ruleBar.Close()
 	println()
 	return sortedRules
-}
-
-func loadStateScores(inputFile string) []ruleObj {
-	defer timer("loadStateScores")()
-	ruleLines, _ := lineCounter(inputFile)
-	ruleQueue := make(chan lineObj, 100)
-	ruleOutput := make(chan ruleObj, ruleLines)
-	threadCount := runtime.NumCPU()
-	wg := sync.WaitGroup{}
-
-	for i := 0; i < threadCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for rawLineObj := range ruleQueue {
-				fitness := parseUint64(strings.SplitN(rawLineObj.line, "\t", 3)[0])
-				lastFitness := parseUint64(strings.SplitN(rawLineObj.line, "\t", 3)[1])
-				rawLineObj.line = strings.SplitN(rawLineObj.line, "\t", 3)[2]
-				rawLineObj.line = strings.ReplaceAll(rawLineObj.line, "\t", " ")
-
-				ruleObject, _ := ConvertFromHashcat(rawLineObj.ID, rawLineObj.line)
-				hits := make(map[uint64]struct{})
-				ruleOutput <- ruleObj{rawLineObj.ID, fitness, lastFitness, ruleObject, false, hits, sync.Mutex{}}
-			}
-		}()
-	}
-
-	ruleBar := progressbar.NewOptions(ruleLines,
-		progressbar.OptionSetPredictTime(true),
-		progressbar.OptionShowDescriptionAtLineEnd(),
-		progressbar.OptionSetRenderBlankState(true),
-		progressbar.OptionThrottle(500*time.Millisecond),
-		progressbar.OptionShowElapsedTimeOnFinish(),
-		progressbar.OptionSetWidth(25),
-		progressbar.OptionShowIts(),
-		progressbar.OptionShowCount(),
-	)
-	file, err := os.Open(inputFile)
-	if err != nil {
-		log.Println("Error opening file:", err)
-		return []ruleObj{}
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	ruleLineCounter := uint64(1)
-
-	for scanner.Scan() {
-		lineObject := new(lineObj)
-		lineObject.ID = ruleLineCounter
-		lineObject.line = scanner.Text()
-		if len(lineObject.line) == 0 {
-			continue
-		}
-		ruleQueue <- *lineObject
-		ruleLineCounter++
-		if ruleLineCounter%10000 == 0 {
-			ruleBar.Add(10000)
-		}
-	}
-	ruleBar.Add(int(ruleLineCounter))
-	close(ruleQueue)
-	go func() {
-		wg.Wait()
-		close(ruleOutput)
-	}()
-
-	// Step 1: Consume the channel into a slice
-	var sortedRules []ruleObj
-	for obj := range ruleOutput {
-		sortedRules = append(sortedRules, obj)
-	}
-
-	// Step 2: Sort the slice by ID
-	sort.Slice(sortedRules, func(i, j int) bool {
-		return sortedRules[i].ID < sortedRules[j].ID
-	})
-	ruleBar.Finish()
-	ruleBar.Close()
-	println()
-	return sortedRules
-}
-
-func loadHashedWordlist(inputFile string) []uint64 {
-	defer timer("loadHashedWordlist")()
-	wordlistLineCount, _ := lineCounter(inputFile)
-	passwordQueue := make(chan []string, 100)
-	resultQueue := make(chan []uint64, 100)
-	threadCount := runtime.NumCPU()
-	wg := sync.WaitGroup{}
-	wgg := sync.WaitGroup{}
-
-	for i := 0; i < threadCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for bufferQueue := range passwordQueue {
-				var bufferResults []uint64
-				for _, rawLine := range bufferQueue {
-					if len(rawLine) <= 32 {
-						bufferResults = append(bufferResults, xxhash.Sum64String(rawLine))
-					}
-				}
-				resultQueue <- bufferResults
-			}
-		}()
-	}
-
-	wordlistBar := progressbar.NewOptions(wordlistLineCount,
-		progressbar.OptionSetPredictTime(true),
-		progressbar.OptionShowDescriptionAtLineEnd(),
-		progressbar.OptionSetRenderBlankState(true),
-		progressbar.OptionThrottle(500*time.Millisecond),
-		progressbar.OptionShowElapsedTimeOnFinish(),
-		progressbar.OptionSetWidth(25),
-		progressbar.OptionShowIts(),
-		progressbar.OptionShowCount(),
-	)
-	file, err := os.Open(inputFile)
-	if err != nil {
-		log.Println("Error opening file:", err)
-		return []uint64{}
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	ruleLineCounter := uint64(1)
-
-	var resultSlice []uint64
-	wgg.Add(1)
-	go func() {
-		defer wgg.Done()
-		for obj := range resultQueue {
-			resultSlice = append(resultSlice, obj...)
-		}
-	}()
-
-	var buffer []string
-	bufferSize := 10000
-	for scanner.Scan() {
-		line := scanner.Text()
-		if len(line) == 0 {
-			continue
-		}
-		buffer = append(buffer, line)
-		ruleLineCounter++
-		if len(buffer) >= bufferSize {
-			passwordQueue <- buffer
-			buffer = make([]string, 0, bufferSize)
-			wordlistBar.Add(bufferSize)
-		}
-	}
-	if len(buffer) > 0 {
-		passwordQueue <- buffer
-		wordlistBar.Add(len(buffer))
-	}
-	wordlistBar.Finish()
-	wordlistBar.Close()
-	println()
-
-	print("Finalizing Preparation 1/3")
-	close(passwordQueue)
-	wg.Wait()
-	print("...2/3")
-	close(resultQueue)
-	wgg.Wait()
-	sort.Slice(resultSlice, func(i, j int) bool { return resultSlice[i] < resultSlice[j] })
-	println("...3/3")
-	return resultSlice
 }
