@@ -24,6 +24,7 @@ void deallocateHashes(uint64_t *d_hashes, cudaStream_t stream);
 
 void initializeHitCount(uint64_t **d_hitCount, cudaStream_t stream);
 void pullHitCount(uint64_t *d_hitCount, uint64_t* h_hitCount, cudaStream_t stream);
+void resetHashes(uint64_t **d_hashes, int hashCount, cudaStream_t stream);
 void resetHitCount(uint64_t **d_hitCount, cudaStream_t stream);
 void deallocateHitCount(uint64_t *d_hitCount, cudaStream_t stream);
 
@@ -50,11 +51,13 @@ import (
 // Lengths suffix defines the lengths of each element respectively
 func generatePhase1(cli CLI) {
 	//wordlistHashes := loadHashedWordlist(cli.Score.Wordlist)
-	wordlist, wordlistLengths, wordlistCount := loadWordlist(cli.Score.Wordlist)
+	wordlist, wordlistLengths, wordlistCount, _ := loadWordlist(cli.Score.Wordlist)
 	targetHashes := loadHashedWordlist(cli.Score.Target)
 	targetCount := len(targetHashes)
 	rules := loadRulesFast(cli.Score.RuleFile)
 
+	totalMemoryEstimate := wordlistCount*4 + wordlistCount*1 + targetCount*4 + targetCount*1
+	log.Printf("Expected memory usage is: %dGB", totalMemoryEstimate/1000000000)
 	deviceCount := CUDAGetDeviceCount()
 	log.Printf("Detected %d GPU devices. Initializing", deviceCount)
 
@@ -113,7 +116,7 @@ func processRuleFile(
 
 	go func() {
 		defer wgResult.Done()
-		outputFile, err := os.OpenFile(cli.Simulate.OutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		outputFile, err := os.OpenFile(cli.Score.OutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			fmt.Println("Error opening or creating file:", err)
 			return
@@ -139,7 +142,7 @@ func processRuleFile(
 			gpuProcessed, gpuProcessedLengths := cudaInitializeDict(wordlistBytes, wordlistLengths, wordlistCount, stream)
 			gpuProcessedHashes := cudaInitializeHashes(&processedHashes, wordlistCount, stream)
 
-			gpuFoundHashes := cudaInitializeHashes(&processedHashes, targetCount, stream)
+			gpuFoundHashes := cudaInitializeHashes(&processedHashes, wordlistCount, stream)
 			gpuTargetHashes := cudaInitializeHashes(targetHashes, targetCount, stream)
 			gpuHitCount := cudaInitializeHitCount(stream)
 
@@ -210,8 +213,8 @@ func processRuleFile(
 
 // ~10% improvement by using wordlist instead of hashes. Trading VRAM for speed.
 func generatePhase1Fast(cli CLI) {
-	wordlist, wordlistLengths, wordlistCount := loadWordlist(cli.Score.Wordlist)
-	target, targetLengths, targetCount := loadWordlist(cli.Score.Target)
+	wordlist, wordlistLengths, wordlistCount, _ := loadWordlist(cli.Score.Wordlist)
+	target, targetLengths, targetCount, _ := loadWordlist(cli.Score.Target)
 	target = removeAfromB(wordlist, target)
 
 	log.Println("Loading Rules")

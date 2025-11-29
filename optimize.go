@@ -44,61 +44,39 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-func prepareCompare(wordlist, target string) ([]uint64, int, []uint64, int) {
+func generatePhase2(cli CLI) {
 	var startup sync.WaitGroup
-	startup.Add(2)
-
-	wordlistCount, _ := lineCounter(wordlist)
-	originalHashes := make([]uint64, 0, wordlistCount)
-	go func() {
-		defer startup.Done()
-		originalHashes = loadHashedWordlist(wordlist)
-	}()
-
-	var compareDictHashes []uint64
-	var compareDictCount int
+	startup.Add(1)
+	var targetHashes []uint64
+	var targetCount int
 	if fileExists(stateHashFile) {
-		var err error
 		go func() {
+			var err error
 			defer startup.Done()
-			compareDictHashes, err = loadCompareDictState(stateHashFile)
+			targetHashes, err = loadCompareDictState(stateHashFile)
 			if err != nil {
 				log.Printf("Error loading hash state: %v", err)
 				return
 			}
-			compareDictCount = len(compareDictHashes)
 		}()
 	} else {
 		go func() {
 			defer startup.Done()
-			compareDictCount, _ = lineCounter(target)
-			compareDictHashes = make([]uint64, 0, compareDictCount)
-			compareDictHashes = loadHashedWordlist(target)
+			targetHashes = loadHashedWordlist(cli.Optimize.Target)
+			targetCount = len(targetHashes)
 		}()
 	}
-
+	wordlist, wordlistLengths, wordlistCount, _ := loadWordlist(cli.Optimize.Wordlist)
 	startup.Wait()
-	return originalHashes, wordlistCount, compareDictHashes, compareDictCount
-}
-
-func generatePhase2(cli CLI) {
-	originalHashes, wordlistCount, compareDictHashes, compareDictCount := prepareCompare(cli.Evaluate.Wordlist, cli.Evaluate.Target)
-	// End startup preparation
-	wordlist, wordlistLengths, wordlistCount := loadWordlist(cli.Evaluate.Wordlist)
 
 	log.Println("Loading Rule Scores")
 	var rules []ruleObj
 	if fileExists(stateFile) {
 		fmt.Println("Loading from state file...")
-		var err error
 		rules = loadStateScores(stateFile)
-		if err != nil {
-			log.Printf("Error loading state: %v, loading from original file", err)
-			rules = loadRuleScores(cli.Evaluate.ScoreFile)
-		}
 	} else {
 		// Load from original file
-		rules = loadRuleScores(cli.Evaluate.ScoreFile)
+		rules = loadRuleScores(cli.Optimize.ScoreFile)
 	}
 	log.Printf("Loaded %d Rule Scores", len(rules))
 
@@ -108,17 +86,22 @@ func generatePhase2(cli CLI) {
 	deviceCount := CUDAGetDeviceCount()
 	log.Printf("Detected %d GPU devices. Sorting rules (can take a minute+)", deviceCount)
 
+	// Sort rules by fitness
 	sort.Slice(rules, func(i, j int) bool {
 		return rules[i].Fitness > rules[j].Fitness
 	})
-	// Compute Rule
+	for id := range rules {
+		rules[id].ID = uint64(id + 1)
+	}
 
+	// Convert to 2d byte array in chunks of size MaxLen
 	wordlistBytes := make([]byte, (wordlistCount)*MaxLen)
 	for i, word := range wordlist {
 		copy(wordlistBytes[i*MaxLen:], word)
 	}
 	wordlist = nil
 
+	// Set last fitness to rule 1 or the last processed rule from state.
 	lastBestFitness := rules[0].Fitness
 	if fileExists(stateFile) {
 		lastBestFitness = rules[len(rules)-1].Fitness
@@ -126,53 +109,9 @@ func generatePhase2(cli CLI) {
 	var bestRule *ruleObj
 	var hashedWords []uint64
 
-	saveEvery := 100
 	processed := 0
-	for lastBestFitness > 0 {
-		// todo: find a way to reduce rules in size (memory usage)
-		rules, bestRule, hashedWords = processRuleRound(
-			rules,
-			deviceCount,
-			&wordlistBytes,
-			&wordlistLengths,
-			&originalHashes,
-			&compareDictHashes,
-			wordlistCount,
-			compareDictCount,
-			lastBestFitness,
-		)
-		log.Printf("New candidate %d with score: %d", bestRule.ID, bestRule.LastFitness)
-		lastBestFitness = bestRule.LastFitness
-		rules[bestRule.ID-1].LastFitness = 0 // ID starts at 1
 
-		compareDictHashes = cleanWords(&compareDictHashes, &hashedWords)
-		compareDictCountNew := len(compareDictHashes)
-
-		print()
-		log.Printf("%d new words found.", compareDictCount-compareDictCountNew)
-		appendScoreToFile(cli.Evaluate.OutputFile, uint64(compareDictCount-compareDictCountNew), bestRule)
-		compareDictCount = compareDictCountNew
-
-		processed += 1
-		if processed%saveEvery == 0 {
-			// Sort rules by LastFitness in descending order
-			err := saveState(stateFile, stateHashFile, &rules, compareDictHashes)
-			if err != nil {
-				log.Printf("Error saving state: %v", err)
-				return // state file is corrupt, better to stop early.
-			}
-		}
-	}
-}
-
-func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, wordlistLengths *[]uint8, wordlistHashes *[]uint64, targetHashes *[]uint64, wordlistCount int, targetCount int, lastFitness uint64) ([]ruleObj, *ruleObj, []uint64) {
-	deviceCount = CUDAGetDeviceCount()
-	ruleChan := make(chan *ruleObj, deviceCount)
-	var writerMutex sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(deviceCount)
-
-	processBar := progressbar.NewOptions(len(rules)*wordlistCount,
+	processBar := progressbar.NewOptions(len(rules),
 		progressbar.OptionSetPredictTime(true),
 		progressbar.OptionShowDescriptionAtLineEnd(),
 		progressbar.OptionSetRenderBlankState(true),
@@ -182,6 +121,64 @@ func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, w
 		progressbar.OptionShowIts(),
 		progressbar.OptionShowCount(),
 	)
+
+	chosenRuleIDs := make(map[uint64]struct{}, len(rules))
+	for lastBestFitness > 0 {
+		rules, bestRule, hashedWords = processRuleRound(
+			rules,
+			deviceCount,
+			&wordlistBytes,
+			&wordlistLengths,
+			&targetHashes,
+			wordlistCount,
+			targetCount,
+			lastBestFitness,
+		)
+		lastBestFitness = bestRule.LastFitness
+		rules[bestRule.ID-1].LastFitness = 0 // ID starts at 1
+		chosenRuleIDs[bestRule.ID] = struct{}{}
+
+		hitCount := 0
+		targetHashes, hitCount = cleanWords(targetHashes, hashedWords)
+		targetCount = len(targetHashes)
+
+		//log.Printf("Line [%d] Found %d new", bestRule.ID, lastBestFitness)
+		appendScoreToFile(cli.Optimize.OutputFile, uint64(hitCount), bestRule)
+		processBar.Add(1)
+
+		processed += 1
+		if processed%cli.Optimize.SaveEvery == 0 {
+			// Sort rules by LastFitness in descending order
+			err := saveState(stateFile, stateHashFile, &rules, targetHashes)
+			if err != nil {
+				log.Printf("Error saving state: %v", err)
+				return // state file is corrupt, better to stop early.
+			}
+		}
+	}
+	// Append remaining rules with 0 score.
+	for _, rule := range rules {
+		if _, exists := chosenRuleIDs[rule.ID]; exists {
+			continue
+		}
+		appendScoreToFile(cli.Optimize.OutputFile, 0, &rule)
+	}
+
+	err := saveState(stateFile, stateHashFile, &rules, targetHashes)
+	if err != nil {
+		log.Printf("Error saving state: %v", err)
+		return // state file is corrupt, better to stop early.
+	}
+	processBar.Finish()
+	processBar.Close()
+}
+
+func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, wordlistLengths *[]uint8, targetHashes *[]uint64, wordlistCount int, targetCount int, lastFitness uint64) ([]ruleObj, *ruleObj, []uint64) {
+	deviceCount = CUDAGetDeviceCount()
+	ruleChan := make(chan *ruleObj, deviceCount)
+	var writerMutex sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(deviceCount)
 
 	currentBestFitnessRule := &rules[0]
 	hashedWords := make([]uint64, lastFitness)
@@ -197,7 +194,7 @@ func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, w
 			gpuProcessed, gpuProcessedLengths := cudaInitializeDict(wordlistBytes, wordlistLengths, wordlistCount, stream)
 			gpuProcessedHashes := cudaInitializeHashes(&processedHashes, wordlistCount, stream)
 
-			gpuFoundHashes := cudaInitializeHashes(&processedHashes, targetCount, stream)
+			gpuFoundHashes := cudaInitializeHashes(&processedHashes, wordlistCount, stream)
 			gpuTargetHashes := cudaInitializeHashes(targetHashes, targetCount, stream)
 			gpuHitCount := cudaInitializeHitCount(stream)
 
@@ -244,12 +241,8 @@ func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, w
 					gpuFoundHashes,
 					stream,
 				)
-				if len(rule.RuleLine) <= 5 { // experimental 2025-08-22 with the purpose of promoting shorter processedHashes in a decreasing linear algorithm
-					hits *= uint64(10)
-					hits /= uint64(5 + len(rule.RuleLine))
-				}
-				// Write results with existing mutex
-				processBar.Add(wordlistCount)
+
+				// Update results per rule (no mutex needed)
 				rule.LastFitness = hits
 				if hits >= currentBestFitnessRule.LastFitness {
 					// double validation with mutex to guarantee it's accurate
@@ -273,7 +266,6 @@ func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, w
 	// Send all rules to the workers
 	for i := range rules {
 		if rules[i].LastFitness == 0 { // Must have the potential to be better
-			processBar.Add(wordlistCount)
 			continue
 		}
 		if lastFitness == 0 {
@@ -281,40 +273,23 @@ func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, w
 			continue
 		}
 
-		if rules[i].LastFitness < 250000 && rules[i].LastFitness >= 100000 && rules[i].LastFitness < lastFitness-5000 && lastFitness >= 5000 { // if it's far off, skip it
-			processBar.Add(wordlistCount)
+		if rules[i].LastFitness <= currentBestFitnessRule.LastFitness { // Skip if it is the same. Higher speed
 			continue
 		}
-		if rules[i].LastFitness < 80000 && rules[i].LastFitness >= 50000 && rules[i].LastFitness < lastFitness-2000 && lastFitness >= 2000 { // if it's far off, skip it
-			processBar.Add(wordlistCount)
-			continue
-		}
-		if rules[i].LastFitness < 50000 && rules[i].LastFitness >= 10000 && rules[i].LastFitness < lastFitness-500 && lastFitness >= 500 { // if it's far off, skip it
-			processBar.Add(wordlistCount)
-			continue
-		}
-		if rules[i].LastFitness < 10000 && rules[i].LastFitness < lastFitness-100 && lastFitness >= 100 { // if it's far off, skip it
-			processBar.Add(wordlistCount)
-			continue
-		}
-
-		if rules[i].LastFitness < 3000 && rules[i].LastFitness < lastFitness-10 && lastFitness >= 10 { // if it's far off, skip it
-			processBar.Add(wordlistCount)
-			continue
-		}
-		if rules[i].LastFitness < currentBestFitnessRule.LastFitness { // Must have the potential to be better
-			processBar.Add(wordlistCount)
-			continue
-		}
-		if rules[i].Fitness < currentBestFitnessRule.LastFitness { // No potentials left
+		if rules[i].Fitness <= currentBestFitnessRule.LastFitness { // No potentials left
 			break
 		}
+		//if rules[i].LastFitness < currentBestFitnessRule.LastFitness { // Must have the potential to be better
+		//	processBar.Add(wordlistCount)
+		//	continue
+		//}
+		//if rules[i].Fitness < currentBestFitnessRule.LastFitness { // No potentials left
+		//	break
+		//}
 		ruleChan <- &rules[i]
 	}
 
 	close(ruleChan)
 	wg.Wait()
-	processBar.Close()
-	processBar.Finish()
 	return rules, currentBestFitnessRule, hashedWords
 }

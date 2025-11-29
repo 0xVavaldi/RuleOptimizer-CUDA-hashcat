@@ -120,6 +120,7 @@ void deallocateDictionary(char *d_wordlist, uint8_t *d_wordlistLengths, cudaStre
 void allocateHashes(uint64_t **d_hashes, int hashCount, cudaStream_t stream);
 void pushHashes(uint64_t *h_hashes, uint64_t **d_hashes, int hashCount, cudaStream_t stream);
 void overwriteHashes(uint64_t **d_hashes, uint64_t **d_overwrite, int hashCount, cudaStream_t stream);
+void resetHashes(uint64_t **d_hashes, int hashCount, cudaStream_t stream);
 void pullHashes(uint64_t **d_hashes, uint64_t *h_hashes, int hashCount, cudaStream_t stream);
 void deallocateHashes(uint64_t *d_hashes, cudaStream_t stream);
 
@@ -1274,200 +1275,203 @@ func CUDASingleRuleScore(ruleLine *[]Rule,
 	gpuProcessed *C.char, gpuProcessedLengths *C.uint8_t,
 	gpuProcessedHashes *C.uint64_t, wordlistCount int,
 	gpuTargetHashes *C.uint64_t, targetCount int,
-	gpuHitCount *C.uint64_t, gpuFoundHashes *C.uint64_t,
+	gpuHitCount *C.uint64_t,
+	gpuFoundHashes *C.uint64_t,
 	stream C.cudaStream_t,
 ) uint64 {
 	// Reset the processed Wordlist
+	wordlistCountC := C.int(wordlistCount)
 	C.overwriteDictionary(&gpuWordlist, &gpuWordlistLengths, &gpuProcessed, &gpuProcessedLengths, C.int(wordlistCount), stream)
+	C.resetHashes(&gpuFoundHashes, wordlistCountC, stream)
 	C.resetHitCount(&gpuHitCount, stream)
 
 	for _, rule := range *ruleLine {
 		if rule.Function == "l" {
-			C.applyLowerCase(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyLowerCase(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "u" {
-			C.applyUpperCase(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyUpperCase(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "c" {
-			C.applyCapitalize(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyCapitalize(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "C" {
-			C.applyInvertCapitalize(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyInvertCapitalize(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "t" {
-			C.applyToggleCase(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyToggleCase(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "q" {
-			C.applyDuplicateChars(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyDuplicateChars(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "r" {
-			C.applyReverse(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyReverse(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "k" {
-			C.applySwapFirstTwo(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applySwapFirstTwo(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "K" {
-			C.applySwapLastTwo(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applySwapLastTwo(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "d" {
-			C.applyDuplicate(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyDuplicate(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "f" {
-			C.applyReflect(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyReflect(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "{" {
-			C.applyRotateLeft(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyRotateLeft(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "}" {
-			C.applyRotateRight(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyRotateRight(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "[" {
-			C.applyDeleteFirst(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyDeleteFirst(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "]" {
-			C.applyDeleteLast(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyDeleteLast(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "E" {
-			C.applyTitleCase(gpuProcessed, gpuProcessedLengths, C.int(wordlistCount), stream)
+			C.applyTitleCase(gpuProcessed, gpuProcessedLengths, wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "T" {
-			C.applyTogglePosition(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyTogglePosition(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "p" {
-			C.applyRepeatWord(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyRepeatWord(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "D" {
-			C.applyDeletePosition(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyDeletePosition(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "z" {
-			C.applyPrependFirstChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyPrependFirstChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "Z" {
-			C.applyAppendLastChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyAppendLastChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "'" {
-			C.applyTruncateAt(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyTruncateAt(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "s" {
-			C.applySubstitution(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(wordlistCount), stream)
+			C.applySubstitution(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "S" {
-			C.applySubstitutionFirst(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), C.int(wordlistCount), stream)
+			C.applySubstitutionFirst(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.char(rule.Parameter2[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "$" {
-			C.applyAppend(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
+			C.applyAppend(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "^" {
-			C.applyPrepend(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
+			C.applyPrepend(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "y" {
-			C.applyAppendSuffixSubstr(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyAppendSuffixSubstr(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "Y" {
-			C.applyPrependPrefixSubstr(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyPrependPrefixSubstr(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "L" {
-			C.applyBitShiftLeft(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyBitShiftLeft(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "R" {
-			C.applyBitShiftRight(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyBitShiftRight(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "-" {
-			C.applyDecrementChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyDecrementChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "+" {
-			C.applyIncrementChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyIncrementChar(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "@" {
-			C.applyDeleteAllChar(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
+			C.applyDeleteAllChar(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "." {
-			C.applySwapNext(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applySwapNext(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "," {
-			C.applySwapLast(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applySwapLast(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "e" {
-			C.applyTitleSeparator(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
+			C.applyTitleSeparator(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "i" {
-			C.applyInsert(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(wordlistCount), stream)
+			C.applyInsert(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "O" {
-			C.applyOmit(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(wordlistCount), stream)
+			C.applyOmit(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "o" {
-			C.applyOverwrite(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), C.int(wordlistCount), stream)
+			C.applyOverwrite(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.char(rule.Parameter2[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "*" {
-			C.applySwapAny(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(wordlistCount), stream)
+			C.applySwapAny(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "x" {
-			C.applyExtract(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), C.int(wordlistCount), stream)
+			C.applyExtract(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(rule.NumericParameter2), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "<" {
-			C.applyRejectLess(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyRejectLess(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == ">" {
-			C.applyRejectGreater(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyRejectGreater(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "_" {
-			C.applyRejectEqual(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), C.int(wordlistCount), stream)
+			C.applyRejectEqual(gpuProcessed, gpuProcessedLengths, C.int(rule.NumericParameter1), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "!" {
-			C.applyRejectContain(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
+			C.applyRejectContain(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "/" {
-			C.applyRejectNotContain(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(wordlistCount), stream)
+			C.applyRejectNotContain(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), wordlistCountC, stream)
 			continue
 		}
 		if rule.Function == "3" {
-			C.applyToggleWithNSeparator(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(rule.NumericParameter2), C.int(wordlistCount), stream)
+			C.applyToggleWithNSeparator(gpuProcessed, gpuProcessedLengths, C.char(rule.Parameter1[0]), C.int(rule.NumericParameter2), wordlistCountC, stream)
 			continue
 		}
 	}
@@ -1475,7 +1479,7 @@ func CUDASingleRuleScore(ruleLine *[]Rule,
 	// Synchronize and convert to usable so we can cleanly get rid of memory.
 	hitCount := C.computeXXHashesWithCount(
 		gpuProcessed, gpuProcessedLengths,
-		gpuProcessedHashes, C.int(wordlistCount),
+		gpuProcessedHashes, wordlistCountC,
 		gpuTargetHashes, C.int(targetCount),
 		gpuHitCount,
 		gpuFoundHashes,
@@ -1496,10 +1500,10 @@ func CUDASingleRuleScoreFast(ruleLine *[]Rule,
 	storeHits bool,
 ) uint64 {
 	// Reset the state 3.5ms
-	C.overwriteDictionary(&d_wordlist, &d_wordlistLengths, &d_processedDict, &d_processedDictLengths, C.int(wordlistCount), stream)
-	C.resetDictionary(&d_matching, &d_matchingLengths, C.int(wordlistCount), stream)
-	C.resetHitCount(&d_hitCount, stream)
 	wordlistCountC := C.int(wordlistCount)
+	C.overwriteDictionary(&d_wordlist, &d_wordlistLengths, &d_processedDict, &d_processedDictLengths, wordlistCountC, stream)
+	C.resetDictionary(&d_matching, &d_matchingLengths, wordlistCountC, stream)
+	C.resetHitCount(&d_hitCount, stream)
 
 	for _, rule := range *ruleLine {
 		if rule.Function == "l" {
@@ -1700,7 +1704,7 @@ func CUDASingleRuleScoreFast(ruleLine *[]Rule,
 		d_targetLengths,
 		d_matching,
 		d_matchingLengths,
-		C.int(wordlistCount),
+		wordlistCountC,
 		C.int(targetCount),
 		d_hitCount,
 		stream,
@@ -1733,7 +1737,7 @@ func CUDAGetHashes(hits uint64, d_hashes *C.uint64_t, stream C.cudaStream_t) []u
 func timer(name string) func() {
 	start := time.Now()
 	return func() {
-		fmt.Printf("%s took %v\n", name, time.Since(start))
+		log.Printf("%s took %v\n", name, time.Since(start))
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -20,48 +21,53 @@ func fileExists(filename string) bool {
 	return !os.IsNotExist(err)
 }
 
-// Removing sortedArray (A) from targets (B). Return A-B
-func cleanWords(sortedArray *[]uint64, targets *[]uint64) []uint64 {
-	// Use two pointers technique for O(n+m) complexity
-	i, j := 0, 0 // i for sortedArray, j for targets
-	k := 0       // position to write in sortedArray
+// cleanWords returns elements in targetHashes that are not in foundHashes (A-B)
+// Both input slices must be sorted in ascending order
+func cleanWords(targetHashes []uint64, foundHashes []uint64) ([]uint64, int) {
+	targetCount := len(targetHashes)
+	if targetCount == 0 {
+		return nil, 0
+	}
 
-	for i < len(*sortedArray) && j < len(*targets) {
-		if (*sortedArray)[i] < (*targets)[j] {
-			// Keep this element
-			(*sortedArray)[k] = (*sortedArray)[i]
-			k++
+	result := make([]uint64, 0, targetCount)
+	i, j := 0, 0
+	originalCount := targetCount
+
+	for i < targetCount && j < len(foundHashes) {
+		if targetHashes[i] < foundHashes[j] {
+			// Element not in foundHashes, keep it
+			result = append(result, targetHashes[i])
 			i++
-		} else if (*sortedArray)[i] == (*targets)[j] {
-			// Skip this element
+		} else if targetHashes[i] == foundHashes[j] {
+			// Element found in foundHashes, skip it
 			i++
 			j++
-		} else { // sortedArray[i] > targets[j]
-			// Move to next element
+		} else { // targetHashes[i] > foundHashes[j]
+			// Move to next found hash
 			j++
 		}
 	}
 
-	// Copy remaining elements
-	for i < len(*sortedArray) {
-		(*sortedArray)[k] = (*sortedArray)[i]
-		k++
+	// Add remaining elements from targetHashes
+	for i < targetCount {
+		result = append(result, targetHashes[i])
 		i++
 	}
 
-	return (*sortedArray)[:k]
+	removedCount := originalCount - len(result)
+	return result, removedCount
 }
 
 // Output Writer
 func appendScoreToFile(ruleFileName string, hits uint64, rule *ruleObj) {
 	outputFile, err := os.OpenFile(ruleFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Println("Error opening or creating output file:", err)
+		log.Println("Error opening or creating output file:", err)
 		return
 	}
 
 	if _, err = outputFile.WriteString(strconv.FormatUint(hits, 10) + "\t" + FormatAllRules(rule.RuleLine) + "\n"); err != nil {
-		fmt.Println("Error writing to file output file:", err)
+		log.Println("Error writing to output file:", err)
 		return
 	}
 
@@ -72,13 +78,13 @@ func appendScoreToFile(ruleFileName string, hits uint64, rule *ruleObj) {
 }
 
 // Idea is to load a wordlist that's binary searchable later.
-func loadWordlist(inputFile string) ([]string, []uint8, int) {
+func loadWordlist(inputFile string) ([]string, []uint8, int, int) {
 	defer timer("loadWordlist")()
 
 	file, err := os.Open(inputFile)
 	if err != nil {
 		log.Fatalf("Error opening file: %v", err)
-		return nil, nil, 0
+		return nil, nil, 0, 0
 	}
 	defer file.Close()
 
@@ -89,6 +95,7 @@ func loadWordlist(inputFile string) ([]string, []uint8, int) {
 
 	var entries []WordEntry
 	sum := 0
+	count := 0
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -99,6 +106,7 @@ func loadWordlist(inputFile string) ([]string, []uint8, int) {
 
 		length := uint8(len(line))
 		sum += int(length)
+		count++
 
 		entries = append(entries, WordEntry{
 			Word:   line,
@@ -108,12 +116,11 @@ func loadWordlist(inputFile string) ([]string, []uint8, int) {
 
 	if err := scanner.Err(); err != nil {
 		log.Fatalf("Error reading file: %v", err)
-		return nil, nil, 0
+		return nil, nil, 0, 0
 	}
 
 	println("Sorting", len(entries), "words")
 
-	// Sort using the proper comparison logic
 	sort.Slice(entries, func(i, j int) bool {
 		a, b := entries[i].Word, entries[j].Word
 		minLen := len(a)
@@ -141,7 +148,7 @@ func loadWordlist(inputFile string) ([]string, []uint8, int) {
 		wordlistLengths[i] = entry.Length
 	}
 
-	return wordlist, wordlistLengths, sum
+	return wordlist, wordlistLengths, count, sum
 }
 
 // Load a wordlists, hash it with xxhash64, and return an array of sorted uint64's.
@@ -215,13 +222,14 @@ func loadHashedWordlist(inputFile string) []uint64 {
 			wordlistBar.Add(bufferSize)
 		}
 	}
+
+	// empty buffer
 	if len(buffer) > 0 {
 		passwordQueue <- buffer
 		wordlistBar.Add(len(buffer))
 	}
 	wordlistBar.Finish()
 	wordlistBar.Close()
-	println()
 	// Finish enumerating wordlist
 
 	close(passwordQueue)
@@ -230,6 +238,7 @@ func loadHashedWordlist(inputFile string) []uint64 {
 	wgResult.Wait()
 
 	log.Printf("Sorting %d Hashes. This can take a while.", wordlistLineCount)
+	ParallelSortUint64(resultSlice)
 	sort.Slice(resultSlice, func(i, j int) bool { return resultSlice[i] < resultSlice[j] })
 	return resultSlice
 }
@@ -265,4 +274,150 @@ func ByteCountSI(b int) string {
 	}
 	return fmt.Sprintf("%.1f %cB",
 		float64(b)/float64(div), "kMGTPE"[exp])
+}
+
+// ParallelSortUint64 sorts data in-place using up to maxWorkers concurrent workers.
+// If maxWorkers <= 0 it defaults to runtime.NumCPU().
+func ParallelSortUint64(data []uint64) {
+	n := len(data)
+	if n <= 1 {
+		return
+	}
+
+	maxWorkers := runtime.NumCPU()
+
+	// Small inputs: prefer single-threaded path.
+	if n <= 2048 || maxWorkers == 1 {
+		slices.Sort(data)
+		return
+	}
+
+	// Choose workers but avoid tiny chunks.
+	workers := maxWorkers
+	minChunk := 512 // smaller than for strings because uint64 moves are cheap
+	if n/workers < minChunk {
+		workers = n / minChunk
+		if workers < 1 {
+			workers = 1
+		}
+	}
+
+	// Final guard
+	if workers < 1 {
+		workers = 1
+	}
+
+	// Compute chunkSize and explicit chunk ranges so we know exactly how many chunks we'll sort.
+	chunkSize := (n + workers - 1) / workers // ceil(n/workers)
+
+	type rng struct{ s, e int }
+	var chunks []rng
+	for i := 0; i < workers; i++ {
+		start := i * chunkSize
+		if start >= n {
+			break
+		}
+		end := start + chunkSize
+		if end > n {
+			end = n
+		}
+		chunks = append(chunks, rng{start, end})
+	}
+
+	// Phase 1: sort each chunk in parallel.
+	var sortWg sync.WaitGroup
+	sortWg.Add(len(chunks))
+	for _, c := range chunks {
+		// capture c locally
+		s, e := c.s, c.e
+		go func(s, e int) {
+			defer sortWg.Done()
+			// limit capacity of subslice to avoid accidental retention of larger backing arrays
+			sub := data[s:e:e]
+			slices.Sort(sub)
+		}(s, e)
+	}
+	sortWg.Wait()
+
+	// If only one chunk exists, sorted already.
+	if len(chunks) <= 1 {
+		return
+	}
+
+	// Phase 2: iterative bottom-up merging.
+	// Allocate a single temp buffer (tmpBuf) once, because merges are needed.
+	tmpBuf := make([]uint64, n)
+
+	// Use explicit names for buffers so intent is clear.
+	srcBuf := data   // source for the current pass (initially original data)
+	dstBuf := tmpBuf // destination for the current pass
+
+	// Bound concurrent merges to avoid too many goroutines.
+	maxMergeConcurrency := maxWorkers
+	sem := make(chan struct{}, maxMergeConcurrency)
+
+	// width is run size (starts at chunkSize)
+	for width := chunkSize; width < n; width *= 2 {
+		var passWg sync.WaitGroup
+
+		for start := 0; start < n; start += 2 * width {
+			mid := start + width
+			if mid > n {
+				mid = n
+			}
+			end := start + 2*width
+			if end > n {
+				end = n
+			}
+
+			if mid >= end {
+				// No pair to merge: copy remaining run from src to dst (must preserve order).
+				// Copy inline (no goroutine) for small ranges; cheap for uint64 slices.
+				copy(dstBuf[start:end], srcBuf[start:end])
+				continue
+			}
+
+			passWg.Add(1)
+			sem <- struct{}{} // acquire slot
+			// launch merge worker for [start:mid) and [mid:end) -> dst[start:end)
+			go func(s, m, e int) {
+				defer passWg.Done()
+				mergeIntoUint64(dstBuf, srcBuf, s, m, e)
+				<-sem // release slot
+			}(start, mid, end)
+		}
+
+		passWg.Wait()
+		// swap buffers for next pass
+		srcBuf, dstBuf = dstBuf, srcBuf
+	}
+
+	// If final sorted data resides in tmpBuf (i.e., srcBuf != data), copy it back once.
+	// Note: this copy is necessary only if we performed an odd number of passes.
+	copy(data, srcBuf)
+}
+
+// mergeIntoUint64 merges src[start:mid] and src[mid:end] into dst[start:end].
+func mergeIntoUint64(dst, src []uint64, start, mid, end int) {
+	i, j, k := start, mid, start
+	for i < mid && j < end {
+		if src[i] <= src[j] {
+			dst[k] = src[i]
+			i++
+		} else {
+			dst[k] = src[j]
+			j++
+		}
+		k++
+	}
+	for i < mid {
+		dst[k] = src[i]
+		i++
+		k++
+	}
+	for j < end {
+		dst[k] = src[j]
+		j++
+		k++
+	}
 }

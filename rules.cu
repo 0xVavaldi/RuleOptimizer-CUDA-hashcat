@@ -44,20 +44,28 @@ __device__ int device_strncmp(const char* str1, const char* str2, int n) {
     return 0; // First n characters are equal
 }
 
+
+// AI optimized to reduce divergence it gave itself a 9.5/10 - I wonder where the last 0.5 went :)
 __device__ bool binarySearchGPU(const uint64_t* array, int length, uint64_t target) {
+    if (target == 0) return false;
+
     int left = 0;
     int right = length - 1;
-    if (target == 0) { return false; }
+
     while (left <= right) {
         int mid = left + (right - left) / 2;
         uint64_t midVal = array[mid];
-        if (midVal == target) return true;
-        if (midVal < target) left = mid + 1;
-        else right = mid - 1;
+
+        // Completely branchless
+        int cmp = (midVal < target) ? -1 : (midVal > target) ? 1 : 0;
+        left = (cmp == -1) ? mid + 1 : left;
+        right = (cmp == 1) ? mid - 1 : right;
+        if (cmp == 0) return true;
     }
     return false;
 }
 
+// Binary search on strings, also by AI but haven't bothered asking it to optimize for divergence.
 __device__ bool binarySearchGPUFast(char* targets, uint8_t* targetLengths, int targetCount, const char* seek, uint8_t seekLength) {
     if (seek == nullptr || targets == nullptr || targetCount == 0 || seekLength == 0) {
         return false;
@@ -1013,36 +1021,6 @@ __global__ void countUniqueHashesKernel(uint64_t* hashes, int* flags, int size) 
     }
 }
 
-__device__ void warpReduce(volatile int* sdata, int tid) {
-    sdata[tid] += sdata[tid + 32];
-    sdata[tid] += sdata[tid + 16];
-    sdata[tid] += sdata[tid + 8];
-    sdata[tid] += sdata[tid + 4];
-    sdata[tid] += sdata[tid + 2];
-    sdata[tid] += sdata[tid + 1];
-}
-
-__global__ void sumReduction(int* input, int* output, int size) {
-    extern __shared__ int sdata[];
-
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    sdata[tid] = (i < size) ? input[i] : 0;
-    __syncthreads();
-
-    for (unsigned int s = blockDim.x/2; s > 32; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-        }
-        __syncthreads();
-    }
-
-    if (tid < 32) warpReduce(sdata, tid);
-
-    if (tid == 0) output[blockIdx.x] = sdata[0];
-}
-
 //---------------------------------------------------------------------
 // Host Wrappers to Launch Kernels
 //---------------------------------------------------------------------
@@ -1051,294 +1029,252 @@ DLL_EXPORT
 void applyLowerCase(char *d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     lowerCaseKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // u
 DLL_EXPORT
 void applyUpperCase(char *d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     upperCaseKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // c
 DLL_EXPORT
 void applyCapitalize(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     capitalizeKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // C
 DLL_EXPORT
 void applyInvertCapitalize(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     invertCapitalizeKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // t
 DLL_EXPORT
 void applyToggleCase(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     toggleCaseKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // q
 DLL_EXPORT
 void applyDuplicateChars(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     duplicateCharsKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // r
 DLL_EXPORT
 void applyReverse(char *d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     reverseKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // k
 DLL_EXPORT
 void applySwapFirstTwo(char *d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     swapFirstTwoKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // K
 DLL_EXPORT
 void applySwapLastTwo(char *d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     swapLastTwoKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // d
 DLL_EXPORT
 void applyDuplicate(char *d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     duplicateWordKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // f
 DLL_EXPORT
 void applyReflect(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     reflectKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // {
 DLL_EXPORT
 void applyRotateLeft(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     rotateLeftKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
  // }
 DLL_EXPORT
 void applyRotateRight(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     rotateRightKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // [
 DLL_EXPORT
 void applyDeleteFirst(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     deleteFirstKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // ]
 DLL_EXPORT
 void applyDeleteLast(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     deleteLastKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // E
 DLL_EXPORT
 void applyTitleCase(char* d_words, uint8_t *d_lengths, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     titleCaseKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // T
 DLL_EXPORT
 void applyTogglePosition(char* d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     togglePositionKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // p
 DLL_EXPORT
 void applyRepeatWord(char* d_words, uint8_t *d_lengths, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     repeatWordKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // D
 DLL_EXPORT
 void applyDeletePosition(char* d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     deletePositionKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // z
 DLL_EXPORT
 void applyPrependFirstChar(char* d_words, uint8_t *d_lengths, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     prependFirstCharKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // Z
 DLL_EXPORT
 void applyAppendLastChar(char* d_words, uint8_t *d_lengths, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     prependFirstCharKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // '
 DLL_EXPORT
 void applyTruncateAt(char* d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     truncateAtKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // s
 DLL_EXPORT
 void applySubstitution(char *d_words, uint8_t *d_lengths, char oldChar, char newChar, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     substitutionKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, oldChar, newChar, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // S
 DLL_EXPORT
 void applySubstitutionFirst(char *d_words, uint8_t *d_lengths, char oldChar, char newChar, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     substitutionFirstKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, oldChar, newChar, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // $
 DLL_EXPORT
 void applyAppend(char *d_words, uint8_t *d_lengths, char appendChar, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     appendKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, appendChar, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // ^
 DLL_EXPORT
 void applyPrepend(char *d_words, uint8_t *d_lengths, char prefixChar, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     prependKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, prefixChar, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // y
 DLL_EXPORT
 void applyPrependPrefixSubstr(char *d_words, uint8_t *d_lengths, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     prependSubstrKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // Y
 DLL_EXPORT
 void applyAppendSuffixSubstr(char *d_words, uint8_t *d_lengths, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     appendSubstrKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // L
 DLL_EXPORT
 void applyBitShiftLeft(char *d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     bitShiftLeftKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // R
 DLL_EXPORT
 void applyBitShiftRight(char *d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     bitShiftRightKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // -
 DLL_EXPORT
 void applyDecrementChar(char *d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     decrementCharKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // +
 DLL_EXPORT
 void applyIncrementChar(char *d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     incrementCharKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // @
 DLL_EXPORT
 void applyDeleteAllChar(char *d_words, uint8_t *d_lengths, char deleteChar, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     deleteAllCharKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, deleteChar, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // .
 DLL_EXPORT
 void applySwapNext(char *d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     swapNextKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // ,
 DLL_EXPORT
 void applySwapLast(char *d_words, uint8_t *d_lengths, int pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     swapLastKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // e
 DLL_EXPORT
 void applyTitleSeparator(char *d_words, uint8_t *d_lengths, char separator, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     titleSeparatorKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, separator, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // i
 DLL_EXPORT
 void applyInsert(char* d_words, uint8_t *d_lengths, int pos, char insert_char, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     insertKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, insert_char, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // O
 DLL_EXPORT
 void applyOmit(char* d_words, uint8_t *d_lengths, int pos, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     OmitKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // o
 DLL_EXPORT
 void applyOverwrite(char* d_words, uint8_t *d_lengths, int pos, char replace_char, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     overwriteKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, replace_char, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // *
 DLL_EXPORT
 void applySwapAny(char* d_words, uint8_t *d_lengths, int pos, int replace_pos, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     swapAnyKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, replace_pos, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // x
 DLL_EXPORT
 void applyExtract(char* d_words, uint8_t *d_lengths, int pos, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     extractKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, pos, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 // <
 DLL_EXPORT
 void applyRejectLess(char* d_words, uint8_t *d_lengths, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     rejectLessKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 
 // >
@@ -1346,7 +1282,6 @@ DLL_EXPORT
 void applyRejectGreater(char* d_words, uint8_t *d_lengths, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     rejectGreaterKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 
 // _
@@ -1354,7 +1289,6 @@ DLL_EXPORT
 void applyRejectEqual(char* d_words, uint8_t *d_lengths, int count, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     rejectEqualKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, count, numWords);
-    // cudaStreamSynchronize(stream);
 }
 
 // !
@@ -1362,7 +1296,6 @@ DLL_EXPORT
 void applyRejectContain(char* d_words, uint8_t *d_lengths, char contain_char, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     rejectContainKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, contain_char, numWords);
-    // cudaStreamSynchronize(stream);
 }
 
 // /
@@ -1370,7 +1303,6 @@ DLL_EXPORT
 void applyRejectNotContain(char* d_words, uint8_t *d_lengths, char contain_char, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     rejectNotContainKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, contain_char, numWords);
-    // cudaStreamSynchronize(stream);
 }
 
 // 3
@@ -1378,7 +1310,6 @@ DLL_EXPORT
 void applyToggleWithNSeparator(char* d_words, uint8_t *d_lengths, char separator_char, int separator_num, int numWords, cudaStream_t stream) {
     int blocks = (numWords + THREADS - 1) / THREADS;
     toggleWithNSeparatorKernel<<<blocks, THREADS, 0, stream>>>(d_words, d_lengths, separator_char, separator_num, numWords);
-    // cudaStreamSynchronize(stream);
 }
 
 // Allocate dictionary memory & dictionary lengths memory
@@ -1463,7 +1394,17 @@ void overwriteHashes(
     int hashCount,
     cudaStream_t stream
 ) {
-    CUDA_CHECK(cudaMemcpyAsync(*d_toOverwrite, *d_hashes, hashCount * sizeof(uint64_t), cudaMemcpyDeviceToDevice , stream));
+    CUDA_CHECK(cudaMemcpyAsync(*d_toOverwrite, *d_hashes, hashCount * sizeof(uint64_t), cudaMemcpyDeviceToDevice, stream));
+}
+
+// Reset the hashes to 0
+DLL_EXPORT
+void resetHashes(
+    uint64_t **d_hashes,
+    int hashCount,
+    cudaStream_t stream
+) {
+   CUDA_CHECK(cudaMemsetAsync(*d_hashes, 0, hashCount * sizeof(uint64_t), stream));
 }
 
 // Copy device memory back to host
@@ -1475,6 +1416,7 @@ void pullHashes(
     cudaStream_t stream
 ) {
     CUDA_CHECK(cudaMemcpyAsync(h_hashes, *d_hashes, hashCount * sizeof(uint64_t), cudaMemcpyDeviceToHost, stream));
+	CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 DLL_EXPORT
@@ -1490,6 +1432,7 @@ void initializeHitCount(uint64_t **d_hitCount, cudaStream_t stream) {
 
 void pullHitCount(uint64_t *d_hitCount, uint64_t* h_hitCount, cudaStream_t stream) {
     cudaMemcpyAsync(h_hitCount, d_hitCount, sizeof(uint64_t), cudaMemcpyDeviceToHost, stream);
+	CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 DLL_EXPORT
@@ -1519,7 +1462,7 @@ __global__ void xxhashWithHitsKernel(
     const uint64_t* d_targetHashes,
     int targetCount,
     uint64_t* hitCount,
-    uint64_t* d_matchingHashes,
+    uint64_t* d_foundHashes,
     uint64_t seed
 ) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1531,7 +1474,7 @@ __global__ void xxhashWithHitsKernel(
     const bool inCompare = binarySearchGPU(d_targetHashes, targetCount, hash);
     if (inCompare) {
         uint64_t pos = atomicAdd(reinterpret_cast<unsigned long long*>(hitCount), 1ULL);
-        d_matchingHashes[pos] = hash;
+        d_foundHashes[pos] = hash;
     }
 }
 
@@ -1665,7 +1608,7 @@ uint64_t computeXXHashesWithCount(
     const uint64_t* d_targetHashes,
     int targetCount,
     uint64_t* d_hitCount,
-    uint64_t* d_matchingHashes,
+    uint64_t* d_foundHashes,
     uint64_t seed,
     cudaStream_t stream
 ) {
@@ -1678,16 +1621,19 @@ uint64_t computeXXHashesWithCount(
         d_targetHashes,
         targetCount,
         d_hitCount,
-        d_matchingHashes,
+        d_foundHashes,
         seed
     );
 
     uint64_t hitCount;
     pullHitCount(d_hitCount, &hitCount, stream);
-    auto exec_policy = thrust::cuda::par.on(stream);
-    thrust::sort(exec_policy, d_matchingHashes, d_matchingHashes + hitCount);
-    auto new_end = thrust::unique(exec_policy, d_matchingHashes, d_matchingHashes + hitCount);
-    return new_end - d_matchingHashes;
+    if(hitCount > 0) {
+        auto exec_policy = thrust::cuda::par.on(stream);
+        thrust::sort(exec_policy, d_foundHashes, d_foundHashes + hitCount);
+        auto new_end = thrust::unique(exec_policy, d_foundHashes, d_foundHashes + hitCount);
+        return new_end - d_foundHashes;
+    }
+    return hitCount;
 }
 
 DLL_EXPORT
@@ -1713,7 +1659,7 @@ void computeXXHashesWithHits(
     thrust::sort(exec_policy, d_matchingHashes, d_matchingHashes + wordlistCount);
     auto new_end = thrust::unique(exec_policy, d_matchingHashes, d_matchingHashes + wordlistCount);
     size_t unique_count = new_end - d_matchingHashes;
-    cudaMemcpyAsync(d_hitCount, &unique_count, sizeof(uint64_t), cudaMemcpyHostToDevice, stream);
+    pullHitCount(d_hitCount, &unique_count, stream);
 }
 
 } // extern "C"

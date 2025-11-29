@@ -36,18 +36,26 @@ import "C"
 import (
 	"log"
 	"runtime"
+	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 func generateSimulate(cli CLI) {
-
 	log.Println("Loading Wordlist")
-	wordlist, wordlistLengths, wordlistCount := loadWordlist(cli.Simulate.Wordlist)
+	wordlist, wordlistLengths, wordlistCount, _ := loadWordlist(cli.Simulate.Wordlist)
+	wordlistHashes := loadHashedWordlist(cli.Simulate.Wordlist)
 	log.Println("Loading Target")
 	targetHashes := loadHashedWordlist(cli.Simulate.Target)
-	targetCount := len(targetHashes)
-	log.Println("Loading Rules")
-	rules := loadRulesFast(cli.Score.RuleFile)
+	targetHashes, _ = cleanWords(targetHashes, wordlistHashes)
+	wordlistHashes = nil // clear hashes after removing founds.
 
+	targetCount := len(targetHashes)
+	if targetCount == 0 {
+		log.Fatalf("No targets loaded, please check your input file and verify they are <%d characters", MaxLen)
+	}
+	log.Println("Loading Rules")
+	rules := loadRulesFast(cli.Simulate.RuleFile)
 	log.Printf("Loaded %d Rules", len(rules))
 
 	// Convert to 2d byte array in chunks of size MaxLen
@@ -56,6 +64,8 @@ func generateSimulate(cli CLI) {
 		copy(wordlistBytes[i*MaxLen:], word)
 	}
 	wordlist = nil
+
+	// because it's single-threaded basically, it's hard to multi-process with dependencies unless you look ahead and then zap (but that is a tradeoff)
 
 	deviceID := 0
 	runtime.LockOSThread()
@@ -68,7 +78,7 @@ func generateSimulate(cli CLI) {
 	gpuProcessed, gpuProcessedLengths := cudaInitializeDict(&wordlistBytes, &wordlistLengths, wordlistCount, stream)
 	gpuProcessedHashes := cudaInitializeHashes(&processedHashes, wordlistCount, stream)
 
-	gpuFoundHashes := cudaInitializeHashes(&processedHashes, targetCount, stream)
+	gpuFoundHashes := cudaInitializeHashes(&processedHashes, wordlistCount, stream)
 	gpuTargetHashes := cudaInitializeHashes(&targetHashes, targetCount, stream)
 	gpuHitCount := cudaInitializeHitCount(stream)
 
@@ -106,14 +116,23 @@ func generateSimulate(cli CLI) {
 	totalHits := uint64(0)
 	processedRules := 0
 
+	processBar := progressbar.NewOptions(len(rules)*wordlistCount,
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionThrottle(1000*time.Millisecond),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetWidth(25),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowCount(),
+	)
 	// Process each rule sequentially without optimization
 	for i := range rules {
-		if targetCount == 0 {
+		if totalHits == uint64(targetCount) {
 			log.Println("All target words found, stopping simulation")
 			break
 		}
-
-		log.Printf("Processing rule %d/%d (remaining targets: %d)", i+1, len(rules), targetCount)
+		//log.Printf("Processing rule %d/%d (remaining targets: %d)", i+1, len(rules), targetCount)
 
 		// Process single rule with existing GPU resources
 		rule := &rules[i]
@@ -127,33 +146,25 @@ func generateSimulate(cli CLI) {
 			gpuFoundHashes,
 			stream,
 		)
+		processBar.Add(wordlistCount)
 
 		if hits > 0 {
 			// Get the found hashes from GPU
 			hashedWords := CUDAGetHashes(hits, gpuFoundHashes, stream)
-
 			// Remove found words from target and calculate hits
-			beforeCount := targetCount
-			targetHashes = cleanWords(&targetHashes, &hashedWords)
-			targetCount = len(targetHashes)
-			ruleHits := beforeCount - targetCount
-
+			ruleHits := 0
+			targetHashes, ruleHits = cleanWords(targetHashes, hashedWords)
 			totalHits += uint64(ruleHits)
-			log.Printf("Rule %d found %d new words (total: %d)", i+1, ruleHits, totalHits)
+			//log.Printf("Rule %d found %d new words (total: %d)", i+1, ruleHits, totalHits)
 			appendScoreToFile(cli.Simulate.OutputFile, uint64(ruleHits), rule)
 		} else {
 			appendScoreToFile(cli.Simulate.OutputFile, uint64(0), rule)
 		}
-
 		processedRules++
-
-		// Progress update every 100 rules
-		if processedRules%100 == 0 {
-			log.Printf("Progress: %d/%d rules processed, %d total hits, %d targets remaining",
-				processedRules, len(rules), totalHits, targetCount)
-		}
 	}
-
+	processBar.Finish()
+	processBar.Close()
+	println()
 	log.Printf("Simulation completed: %d rules processed, %d total hits, %d targets remaining",
 		processedRules, totalHits, targetCount)
 }
