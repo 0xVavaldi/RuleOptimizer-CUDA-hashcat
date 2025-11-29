@@ -50,16 +50,16 @@ import (
 // Count suffix defines the amount of elements in the array
 // Lengths suffix defines the lengths of each element respectively
 func generatePhase1(cli CLI) {
-	//wordlistHashes := loadHashedWordlist(cli.Score.Wordlist)
 	wordlist, wordlistLengths, wordlistCount, _ := loadWordlist(cli.Score.Wordlist)
 	targetHashes := loadHashedWordlist(cli.Score.Target)
 	targetCount := len(targetHashes)
 	rules := loadRulesFast(cli.Score.RuleFile)
 
-	totalMemoryEstimate := wordlistCount*4 + wordlistCount*1 + targetCount*4 + targetCount*1
-	log.Printf("Expected memory usage is: %dGB", totalMemoryEstimate/1000000000)
+	log.Printf("Running rule file: %s\n", cli.Score.RuleFile)
+	totalMemoryEstimate := wordlistCount*32*2 + wordlistCount*2 + wordlistCount*8*2 + wordlistCount*1 + targetCount*8
+	log.Printf("Expected memory usage is: %dGB\n", totalMemoryEstimate/1000000000)
 	deviceCount := CUDAGetDeviceCount()
-	log.Printf("Detected %d GPU devices. Initializing", deviceCount)
+	log.Printf("Detected %d GPU devices. Initializing\n", deviceCount)
 
 	// Convert to 2d byte array in chunks of size MaxLen
 	wordlistBytes := make([]byte, (wordlistCount)*MaxLen)
@@ -274,7 +274,7 @@ func processRuleFileFast(
 	wgg.Add(1)
 
 	totalMemoryEstimate := wordlistCount*MaxLen + wordlistCount*MaxLen + targetCount*MaxLen + targetCount*MaxLen
-	fmt.Printf("Expected memory usage is: %dGB", totalMemoryEstimate/1000000000)
+	log.Printf("Expected memory usage is: %dGB", totalMemoryEstimate/1000000000)
 
 	processBar := progressbar.NewOptions(wordlistCount*len(rules),
 		progressbar.OptionSetPredictTime(true),

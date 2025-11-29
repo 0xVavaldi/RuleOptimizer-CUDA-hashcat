@@ -34,10 +34,11 @@ void computeCountFast(char *d_processedDict, uint8_t *d_processedLengths, char *
 */
 import "C"
 import (
-	"fmt"
 	"log"
 	"runtime"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,6 +59,8 @@ func generatePhase2(cli CLI) {
 				log.Printf("Error loading hash state: %v", err)
 				return
 			}
+			targetCount = len(targetHashes)
+			log.Printf("Loaded %d target hashes from state file.\n", targetCount)
 		}()
 	} else {
 		go func() {
@@ -70,29 +73,29 @@ func generatePhase2(cli CLI) {
 	startup.Wait()
 
 	log.Println("Loading Rule Scores")
+	deviceCount := CUDAGetDeviceCount()
+	log.Printf("Detected %d GPU devices. Sorting rules (can take a minute+)", deviceCount)
 	var rules []ruleObj
 	if fileExists(stateFile) {
-		fmt.Println("Loading from state file...")
+		log.Println("Loading from state file...")
 		rules = loadStateScores(stateFile)
 	} else {
 		// Load from original file
 		rules = loadRuleScores(cli.Optimize.ScoreFile)
+
+		// Sort rules by fitness
+		sort.Slice(rules, func(i, j int) bool {
+			return rules[i].Fitness > rules[j].Fitness
+		})
+		for id := range rules {
+			rules[id].ID = uint64(id + 1)
+		}
 	}
 	log.Printf("Loaded %d Rule Scores", len(rules))
 
 	// Start processing
 	// Start processing
 	// Start processing. Don't assume they are sorted properly but ensure they are.
-	deviceCount := CUDAGetDeviceCount()
-	log.Printf("Detected %d GPU devices. Sorting rules (can take a minute+)", deviceCount)
-
-	// Sort rules by fitness
-	sort.Slice(rules, func(i, j int) bool {
-		return rules[i].Fitness > rules[j].Fitness
-	})
-	for id := range rules {
-		rules[id].ID = uint64(id + 1)
-	}
 
 	// Convert to 2d byte array in chunks of size MaxLen
 	wordlistBytes := make([]byte, (wordlistCount)*MaxLen)
@@ -104,11 +107,27 @@ func generatePhase2(cli CLI) {
 	// Set last fitness to rule 1 or the last processed rule from state.
 	lastBestFitness := rules[0].Fitness
 	if fileExists(stateFile) {
-		lastBestFitness = rules[len(rules)-1].Fitness
+		var lastLine string
+		previous_results := loadWordlist(cli.Optimize.OutputFile)
+		for result := range previous_results {
+			lastLine = result
+		}
+		log.Printf("Last Line: %s\n", lastLine)
+		if lastLine != "" {
+			parts := strings.Split(lastLine, "\t")
+			if len(parts) > 0 {
+				fitness, err := strconv.Atoi(parts[0])
+				if err == nil {
+					lastBestFitness = fitness
+				}
+			}
+		}
 	}
+
 	var bestRule *ruleObj
 	var hashedWords []uint64
 
+	saveEvery := 1000
 	processed := 0
 
 	processBar := progressbar.NewOptions(len(rules),
@@ -122,7 +141,8 @@ func generatePhase2(cli CLI) {
 		progressbar.OptionShowCount(),
 	)
 
-	chosenRuleIDs := make(map[uint64]struct{}, len(rules))
+	chosenRuleIDs := make(map[uint64]struct{}, len(rules)) // todo: move this to state?
+	// todo: get multiple chunks of rules per layer with all their founds.
 	for lastBestFitness > 0 {
 		rules, bestRule, hashedWords = processRuleRound(
 			rules,
@@ -147,7 +167,7 @@ func generatePhase2(cli CLI) {
 		processBar.Add(1)
 
 		processed += 1
-		if processed%cli.Optimize.SaveEvery == 0 {
+		if processed%saveEvery == 0 {
 			// Sort rules by LastFitness in descending order
 			err := saveState(stateFile, stateHashFile, &rules, targetHashes)
 			if err != nil {
@@ -157,12 +177,12 @@ func generatePhase2(cli CLI) {
 		}
 	}
 	// Append remaining rules with 0 score.
-	for _, rule := range rules {
-		if _, exists := chosenRuleIDs[rule.ID]; exists {
-			continue
-		}
-		appendScoreToFile(cli.Optimize.OutputFile, 0, &rule)
-	}
+	//	for _, rule := range rules {
+	//		if _, exists := chosenRuleIDs[rule.ID]; exists {
+	//			continue
+	//		}
+	//		appendScoreToFile(cli.Optimize.OutputFile, 0, &rule)
+	//	}
 
 	err := saveState(stateFile, stateHashFile, &rules, targetHashes)
 	if err != nil {
@@ -273,9 +293,34 @@ func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, w
 			continue
 		}
 
+		if rules[i].LastFitness >= 10000 && rules[i].LastFitness < 1000000 && rules[i].LastFitness*10 < lastFitness*8 {
+			continue
+		}
+
+		if rules[i].LastFitness < 10000 && rules[i].LastFitness+5 < lastFitness {
+			continue
+		}
+
+		if rules[i].LastFitness < 5000 && rules[i].LastFitness+2 < lastFitness {
+			continue
+		}
+
+		if lastFitness > 502 && rules[i].LastFitness < 500 {
+			continue
+		}
+
+		if lastFitness > 102 && rules[i].LastFitness < 100 {
+			continue
+		}
+
+		//		if lastFitness > 100 && rules[i].LastFitness+100 < lastFitness {
+		//			continue
+		//		}
+
 		if rules[i].LastFitness <= currentBestFitnessRule.LastFitness { // Skip if it is the same. Higher speed
 			continue
 		}
+
 		if rules[i].Fitness <= currentBestFitnessRule.LastFitness { // No potentials left
 			break
 		}

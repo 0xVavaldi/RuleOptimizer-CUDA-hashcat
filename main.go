@@ -33,13 +33,13 @@ type CLI struct {
 		Target     string `arg:"" help:"Path to target data file"`
 		ScoreFile  string `short:"s" help:"Aggregated score file TSV." required:"" placeholder:"best66.score"`
 		OutputFile string `short:"o" help:"Score File to output results to." required:"" placeholder:"best66.optimized"`
-		SaveEvery  int    `help:"Save the state every X selected rules." default:"1000"`
 	} `cmd:"" help:"Optimize a score file."`
 	Simulate struct {
 		Wordlist   string `arg:"" help:"Path to wordlist file"`
 		Target     string `arg:"" help:"Path to target data file"`
 		RuleFile   string `short:"r" help:"Rule file to analyse." required:"" placeholder:"best66.rule"`
 		OutputFile string `short:"o" help:"Score File to output results to." required:"" placeholder:"best66.sim"`
+		DeviceID   int    `short:"d" help:"Device ID." placeholder:"0"`
 	} `cmd:"" help:"Run a simulation on the target list."`
 	Format struct { // Add the ability to remove 0 scores
 		ScoreFile  string `short:"s" help:"Aggregated score file TSV." required:"" placeholder:"best66.score"`
