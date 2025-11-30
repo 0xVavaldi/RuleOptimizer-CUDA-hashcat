@@ -33,6 +33,7 @@ type CLI struct {
 		Target     string `arg:"" help:"Path to target data file"`
 		ScoreFile  string `short:"s" help:"Aggregated score file TSV." required:"" placeholder:"best66.score"`
 		OutputFile string `short:"o" help:"Score File to output results to." required:"" placeholder:"best66.optimized"`
+		SaveEvery  int    `help:"Save progress every x rules." default:"1000"`
 	} `cmd:"" help:"Optimize a score file."`
 	Simulate struct {
 		Wordlist   string `arg:"" help:"Path to wordlist file"`
@@ -65,7 +66,8 @@ type lineObj struct {
 	line string
 }
 
-// Constants
+// Max length of words to support. Note that this will increase VRAM usage significantly.
+// 32 was chosen to match the Hashcat -O kernel limits.
 const MaxLen = 32
 
 var stateFile string
@@ -74,8 +76,8 @@ var stateHashFile string
 func main() {
 	var cli CLI
 	ctx := kong.Parse(&cli,
-		kong.Name("CudaRuleScoreOptimizer"),
-		kong.Description("An application that optimizes rule scores with set optimization theory based on performance."),
+		kong.Name("Hashcat CudaRule Optimizer"),
+		kong.Description("An application that optimizes Hashcat rules using set coverage optimization theory based on rule performance."),
 		kong.UsageOnError(),
 	)
 	isAlpha := regexp.MustCompile(`^[A-Za-z]+$`).MatchString

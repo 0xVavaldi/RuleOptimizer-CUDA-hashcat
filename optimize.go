@@ -108,8 +108,8 @@ func generatePhase2(cli CLI) {
 	lastBestFitness := rules[0].Fitness
 	if fileExists(stateFile) {
 		var lastLine string
-		previous_results := loadWordlist(cli.Optimize.OutputFile)
-		for result := range previous_results {
+		previousResults, _, _, _ := loadWordlist(cli.Optimize.OutputFile)
+		for _, result := range previousResults {
 			lastLine = result
 		}
 		log.Printf("Last Line: %s\n", lastLine)
@@ -118,7 +118,7 @@ func generatePhase2(cli CLI) {
 			if len(parts) > 0 {
 				fitness, err := strconv.Atoi(parts[0])
 				if err == nil {
-					lastBestFitness = fitness
+					lastBestFitness = uint64(fitness)
 				}
 			}
 		}
@@ -127,9 +127,7 @@ func generatePhase2(cli CLI) {
 	var bestRule *ruleObj
 	var hashedWords []uint64
 
-	saveEvery := 1000
 	processed := 0
-
 	processBar := progressbar.NewOptions(len(rules),
 		progressbar.OptionSetPredictTime(true),
 		progressbar.OptionShowDescriptionAtLineEnd(),
@@ -167,7 +165,7 @@ func generatePhase2(cli CLI) {
 		processBar.Add(1)
 
 		processed += 1
-		if processed%saveEvery == 0 {
+		if processed%cli.Optimize.SaveEvery == 0 {
 			// Sort rules by LastFitness in descending order
 			err := saveState(stateFile, stateHashFile, &rules, targetHashes)
 			if err != nil {
@@ -293,29 +291,28 @@ func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, w
 			continue
 		}
 
-		if rules[i].LastFitness >= 10000 && rules[i].LastFitness < 1000000 && rules[i].LastFitness*10 < lastFitness*8 {
-			continue
-		}
-
-		if rules[i].LastFitness < 10000 && rules[i].LastFitness+5 < lastFitness {
-			continue
-		}
-
-		if rules[i].LastFitness < 5000 && rules[i].LastFitness+2 < lastFitness {
-			continue
-		}
-
-		if lastFitness > 502 && rules[i].LastFitness < 500 {
-			continue
-		}
-
-		if lastFitness > 102 && rules[i].LastFitness < 100 {
-			continue
-		}
-
-		//		if lastFitness > 100 && rules[i].LastFitness+100 < lastFitness {
-		//			continue
-		//		}
+		// below are extra conditionals that can be added to boost performance.
+		// I tried making something dynamic, but the input & test cases are too diverse
+		// to make it work consistently. So I'm leaving it up to the developers.
+		//if rules[i].LastFitness >= 10000 && rules[i].LastFitness < 1000000 && rules[i].LastFitness*10 < lastFitness*8 {
+		//	continue
+		//}
+		//
+		//if rules[i].LastFitness < 10000 && rules[i].LastFitness+5 < lastFitness {
+		//	continue
+		//}
+		//
+		//if rules[i].LastFitness < 5000 && rules[i].LastFitness+2 < lastFitness {
+		//	continue
+		//}
+		//
+		//if lastFitness > 502 && rules[i].LastFitness < 500 {
+		//	continue
+		//}
+		//
+		//if lastFitness > 102 && rules[i].LastFitness < 100 {
+		//	continue
+		//}
 
 		if rules[i].LastFitness <= currentBestFitnessRule.LastFitness { // Skip if it is the same. Higher speed
 			continue
@@ -324,13 +321,6 @@ func processRuleRound(rules []ruleObj, deviceCount int, wordlistBytes *[]byte, w
 		if rules[i].Fitness <= currentBestFitnessRule.LastFitness { // No potentials left
 			break
 		}
-		//if rules[i].LastFitness < currentBestFitnessRule.LastFitness { // Must have the potential to be better
-		//	processBar.Add(wordlistCount)
-		//	continue
-		//}
-		//if rules[i].Fitness < currentBestFitnessRule.LastFitness { // No potentials left
-		//	break
-		//}
 		ruleChan <- &rules[i]
 	}
 

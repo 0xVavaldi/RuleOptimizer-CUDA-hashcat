@@ -35,7 +35,6 @@ void computeCountFast(char *d_processedDict, uint8_t *d_processedLengths, char *
 */
 import "C"
 import (
-	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -118,14 +117,14 @@ func processRuleFile(
 		defer wgResult.Done()
 		outputFile, err := os.OpenFile(cli.Score.OutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			fmt.Println("Error opening or creating file:", err)
+			log.Println("Error opening or creating file:", err)
 			return
 		}
 		defer outputFile.Close()
 
 		for res := range resultChan {
 			if _, err = outputFile.WriteString(strconv.FormatUint(res.hits, 10) + "\t" + FormatAllRules(res.rule.RuleLine) + "\n"); err != nil {
-				fmt.Println("Error writing to file:", err)
+				log.Println("Error writing to file:", err)
 				continue
 			}
 		}
@@ -297,14 +296,14 @@ func processRuleFileFast(
 		defer wgg.Done()
 		outputFile, err := os.OpenFile(cli.Score.OutputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			fmt.Println("Error opening or creating output score file:", err)
+			log.Println("Error opening or creating output score file:", err)
 			return
 		}
 		defer outputFile.Close()
 
 		for res := range resultChan {
 			if _, err = outputFile.WriteString(strconv.FormatUint(res.hits, 10) + "\t" + FormatAllRules(res.rule.RuleLine) + "\n"); err != nil {
-				fmt.Println("Error writing to output score file:", err)
+				log.Println("Error writing to output score file:", err)
 				continue
 			}
 		}
