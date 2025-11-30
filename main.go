@@ -76,7 +76,7 @@ var stateHashFile string
 func main() {
 	var cli CLI
 	ctx := kong.Parse(&cli,
-		kong.Name("Hashcat CudaRule Optimizer"),
+		kong.Name("cudaRuleSetOptimizer"),
 		kong.Description("An application that optimizes Hashcat rules using set coverage optimization theory based on rule performance."),
 		kong.UsageOnError(),
 	)
