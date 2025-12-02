@@ -1,4 +1,4 @@
-# CUDARule Scoring & Optimization
+# Hashcat Rule Scoring & Set Coverage Optimization
 What started as a hobby project in Q4 of 2024 out of interest in what optimizations were possible in rules, has now grown into a much larger project. With a lot of hardware support from the community I've built a tool that can score rules, counting the potential founds between a wordlist+rules and a target wordlist.
 
 This tool presents a comprehensive package to score rules and optimize rulefiles, finding noise in the madness of rules. Prior to the release of this tool it was not possible to easily determine if a rulefile was effective except by running it through hashcat or RuleProcessorY, but using the tools 'score' functionality you can accurate determine how many founds a specific rule will have given an input wordlist (the same input wordlist used to attack hashcat in hashcat).
