@@ -12,7 +12,7 @@ The base wordlist used for HashMob rules is the HashMob Large wordlist. This wor
 
 Help:
 ```
-Usage: cudaRuleSetOptimizer <command> [flags]
+Usage: ruleSetOptimizer <command> [flags]
 
 An application that optimizes Hashcat rules using set coverage optimization theory based on rule performance.
 
@@ -36,9 +36,9 @@ Commands:
   version [flags]
     Version & Author information
 
-Run "cudaRuleSetOptimizer <command> --help" for more information on a command.
+Run "ruleSetOptimizer <command> --help" for more information on a command.
 
-cudaRuleSetOptimizer: error: expected one of "score", "optimize", "simulate", "format", "version"
+ruleSetOptimizer: error: expected one of "score", "optimize", "simulate", "format", "version"
 ```
 
 
@@ -99,7 +99,7 @@ This will not be perfect as rules will have to be loaded in as well but becomes 
 The first phase has the goal of scoring the performance of rules as if it was the first rule ran. This helps prioritize rules over others and enables larger optimizations later. This phase can be ran on as many rules as you wish and you can cut-off or remove low-scoring entries as you desire as long as the input and target wordlist remain unadjusted.
 
 ```
-Usage: cudaRuleSetOptimizer score --rule-file=best66.rule --output-file=best66.score <wordlist> <target> [flags]
+Usage: ruleSetOptimizer score --rule-file=best66.rule --output-file=best66.score <wordlist> <target> [flags]
 
 Score rule files.
 
@@ -114,7 +114,7 @@ Flags:
   -r, --rule-file=best66.rule       Rule file to analyse.
   -o, --output-file=best66.score    Score File to output results to.
 
-cudaRuleSetOptimizer: error: missing flags: --output-file=best66.score, --rule-file=best66.rule
+ruleSetOptimizer: error: missing flags: --output-file=best66.score, --rule-file=best66.rule
 ```
 
 ```
@@ -129,14 +129,6 @@ Example of a score file:
 218213  $#
 375211  $$
 69374   $%
-32208   $'
-12297   $(
-478727  $*
-103932  $+
-80011   $,
-134949  $-
-1129369 $.
-55203   $/
 5465140 $0
 9352871 $1
 6455906 $2
@@ -147,19 +139,24 @@ Example of a score file:
 5142937 $7
 4660270 $8
 4674669 $9
+465     $7      $0      $1      $8      o66     *60     x38     T0
+465     $*      $2      $6      *8A     'A      s1.
+465     o45     i44
+465     C       $3      $2
+
 ```
 
 ### Phase 2 — Optimizing
-This phase will follow the scoring phase once you've scored all rules you want to evaluate. It is recommended to create a single file containing all scores and sorting them with the following command:
+This phase will follow the scoring phase once you've scored all rules you want to evaluate and optimize. It is recommended to create a single file containing all scores and sorting them with the following command:
 ```shell
-cat *.score | sort -rn > all_scores.dat
+cat *.score | sort -u | sort -rn > all_scores.dat
 ```
-Then run the optimize command to start optimizing. It will work through several phases before starting the optimize process, and there are a few points to be mindful of.
+Then run the optimize command to start optimizing. Before starting the optimize process there are a few points to be mindful of:
 1. A pause and resume function is available, allowing you to stop and resume an optimization task part-way through. Although it's possible to do this for every rule generated, the speed at which optimization happens would make this too inefficient. Therefore a default is set to save every 1000 rules. If you wish to tune this up/down you can do this using the `--save-every` flag.
 2. Optimizing is a slow process that increases its speed over time. The initial 10-1000 rules will be significantly slower.
 
 ```
-Usage: cudaRuleSetOptimizer optimize --score-file=best66.score --output-file=best66.optimized <wordlist> <target> [flags]
+Usage: ruleSetOptimizer optimize --score-file=best66.score --output-file=best66.optimized <wordlist> <target> [flags]
 
 Optimize a score file.
 
@@ -175,7 +172,7 @@ Flags:
   -o, --output-file=best66.optimized    Score File to output results to.
       --save-every=1000                 Save progress every x rules.
 
-cudaRuleSetOptimizer: error: missing flags: --output-file=best66.optimized, --score-file=best66.score
+ruleSetOptimizer: error: missing flags: --output-file=best66.optimized, --score-file=best66.score
 ```
 
 
@@ -188,7 +185,7 @@ Finally, to remove the scores and turn it into a usable rule-file we need to rem
 There are a few ways to do this, use the built-in command, use linux commands, or your own editor
 
 ```
-Usage: cudaRuleSetOptimizer format --score-file=best66.score --output-file=best66.rule [flags]
+Usage: ruleSetOptimizer format --score-file=best66.score --output-file=best66.rule [flags]
 
 Remove the scores from the TSV file and transform it into a hashcat-compatible file.
 
@@ -199,7 +196,7 @@ Flags:
   -s, --score-file=best66.score    Aggregated score file TSV.
   -o, --output-file=best66.rule    Hashcat rule file output.
 
-cudaRuleSetOptimizer: error: missing flags: --output-file=best66.rule, --score-file=best66.score
+ruleSetOptimizer: error: missing flags: --output-file=best66.rule, --score-file=best66.score
 ```
 The command to format it can be either:
 ```bash
@@ -215,7 +212,7 @@ Simulate will emulate a hashcat rule attack on a selected 'target' (hashlist). T
 
 This feature is great for mapping the efficiency of a word- and rule- file on a specific dataset and allows you to draw some very interesting charts that highlight what rules are over/under performing, or how they compare against other files.
 ```
-Usage: cudaRuleSetOptimizer simulate --rule-file=best66.rule --output-file=best66.sim <wordlist> <target> [flags]
+Usage: ruleSetOptimizer simulate --rule-file=best66.rule --output-file=best66.sim <wordlist> <target> [flags]
 
 Run a simulation on the target list.
 
@@ -231,7 +228,7 @@ Flags:
   -o, --output-file=best66.sim    Score File to output results to.
   -d, --device-id=0               Device ID.
 
-cudaRuleSetOptimizer: error: missing flags: --output-file=best66.sim, --rule-file=best66.rule
+ruleSetOptimizer: error: missing flags: --output-file=best66.sim, --rule-file=best66.rule
 ```
 
 ```bash
