@@ -48,8 +48,8 @@ The tool is built in Golang and requires Go to operate, with CGO as bridge to th
 # Ensure your system is up to date.
 apt update -y && apt dist-upgrade -y
 # Install GoLang. The version below shows the latest version at time of release, feel free to take a more recent version.
-wget https://go.dev/dl/go1.25.1.linux-amd64.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go1.25.1.linux-amd64.tar.gz
+wget https://go.dev/dl/go1.25.5.linux-amd64.tar.gz
+rm -rf /usr/local/go && tar -C /usr/local -xzf go1.25.5.linux-amd64.tar.gz
 # Install the NVIDIA Toolkit
 sudo apt install -y nvidia-cuda-toolkit
 ```
