@@ -2,7 +2,8 @@ package main
 
 /*
 #cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/include"
-#cgo LDFLAGS: -L. -lrules -L"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/lib/x64" -lcudart -lcuda
+#cgo windows LDFLAGS: -L. -lrules -L"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/lib/x64" -lcudart -lcuda
+#cgo !windows LDFLAGS: -L. -lrules -lcudart -lcuda
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>

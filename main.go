@@ -1,8 +1,7 @@
 package main
 
-// compile code: nvcc -shared -Xcompiler -o librules.so rules.cu
-// nvcc -shared -o librules.dll rules.cu
-// nvcc -shared -o libxxhash.dll xxhash.cu
+// Build: ./build.sh (Linux) or build.bat (Windows)
+// See README for prerequisites (Go 1.23+, CUDA Toolkit, NVIDIA GPU)
 
 /*
 #include <stdint.h>
